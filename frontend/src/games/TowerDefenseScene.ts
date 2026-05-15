@@ -240,6 +240,9 @@ export class TowerDefenseScene extends Phaser.Scene {
   }
 
   init(data: SceneData) {
+    // Phaser auto-boots the first scene at game start with no data. Skip wiring
+    // until GameHost explicitly restarts us with a real SceneData payload.
+    if (!data || !data.question) return;
     this.question = data.question;
     this.recordAnswer = data.recordAnswer;
     this.onComplete = data.onComplete;
@@ -254,6 +257,7 @@ export class TowerDefenseScene extends Phaser.Scene {
   }
 
   create() {
+    if (!this.question) return;
     this.cameras.main.setBackgroundColor("#070a18");
     this.loadOrInitState();
 

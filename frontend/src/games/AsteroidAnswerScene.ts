@@ -30,6 +30,7 @@ export class AsteroidAnswerScene extends Phaser.Scene {
   }
 
   init(data: SceneData) {
+    if (!data || !data.question) return;
     this.question = data.question;
     this.recordAnswer = data.recordAnswer;
     this.onComplete = data.onComplete;
@@ -43,6 +44,7 @@ export class AsteroidAnswerScene extends Phaser.Scene {
   }
 
   create() {
+    if (!this.question) return;
     this.cameras.main.setBackgroundColor("#05060f");
 
     for (let i = 0; i < 80; i++) {

@@ -4,11 +4,13 @@ import { useEffect, useRef } from "react";
 import { useRunStore } from "../store/runStore";
 import type { Question } from "../types";
 import { AsteroidAnswerScene } from "./AsteroidAnswerScene";
+import { RpgBossScene } from "./RpgBossScene";
 import { GAME_HEIGHT, GAME_WIDTH, type SceneData } from "./sceneContract";
 import { TowerDefenseScene } from "./TowerDefenseScene";
 
 const SCENE_KEY_BY_GAME: Record<string, string> = {
   tower_defense: "TowerDefenseScene",
+  rpg_boss: "RpgBossScene",
   asteroid_answer: "AsteroidAnswerScene",
 };
 
@@ -32,7 +34,7 @@ export function GameHost() {
       width: GAME_WIDTH,
       height: GAME_HEIGHT,
       backgroundColor: "#05060f",
-      scene: [TowerDefenseScene, AsteroidAnswerScene],
+      scene: [TowerDefenseScene, RpgBossScene, AsteroidAnswerScene],
       scale: { mode: Phaser.Scale.NONE },
       render: { pixelArt: false, antialias: true, roundPixels: true },
       disableContextMenu: true,
