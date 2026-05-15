@@ -1,9 +1,19 @@
 import { create } from "zustand";
 
 import { api } from "../api/client";
-import type { AnswerResult, Batch, Question } from "../types";
+import type { AnswerResult, Batch, Domain, Question } from "../types";
 
-export type Phase = "menu" | "loading" | "playing" | "summary" | "error";
+export type Phase = "menu" | "loading" | "playing" | "summary" | "review" | "error";
+
+export interface MissedQuestion {
+  id: number;
+  stem: string;
+  options: [string, string, string, string];
+  domain: Domain;
+  chosenIndex: number;
+  correctIndex: number;
+  explanation: string;
+}
 
 interface RunState {
   phase: Phase;
@@ -19,9 +29,13 @@ interface RunState {
   bestStreak: number;
   totalAnswered: number;
   totalCorrect: number;
+  missed: MissedQuestion[];
   startRun: () => Promise<void>;
   recordAnswer: (chosenIndex: number) => Promise<AnswerResult>;
   advance: () => Promise<void>;
+  abortRun: () => void;
+  startReview: () => void;
+  exitReview: () => void;
   reset: () => void;
 }
 
@@ -49,6 +63,7 @@ export const useRunStore = create<RunState>((set, get) => ({
   bestStreak: 0,
   totalAnswered: 0,
   totalCorrect: 0,
+  missed: [],
 
   startRun: async () => {
     set({ phase: "loading", errorMessage: undefined });
@@ -61,6 +76,7 @@ export const useRunStore = create<RunState>((set, get) => ({
         bestStreak: 0,
         totalAnswered: 0,
         totalCorrect: 0,
+        missed: [],
         ...loadBatchIntoState(s, batch),
       }));
     } catch (e) {
@@ -76,12 +92,27 @@ export const useRunStore = create<RunState>((set, get) => ({
     const result = await api.submitAnswer(runId, currentQuestion.id, chosenIndex);
     set((s) => {
       const newStreak = result.correct ? s.streak + 1 : 0;
+      const missed = result.correct
+        ? s.missed
+        : [
+            ...s.missed,
+            {
+              id: currentQuestion.id,
+              stem: currentQuestion.stem,
+              options: currentQuestion.options,
+              domain: currentQuestion.domain,
+              chosenIndex,
+              correctIndex: result.correct_index,
+              explanation: result.explanation,
+            },
+          ];
       return {
         score: s.score + (result.correct ? 100 + s.streak * 10 : 0),
         streak: newStreak,
         bestStreak: Math.max(s.bestStreak, newStreak),
         totalAnswered: s.totalAnswered + 1,
         totalCorrect: s.totalCorrect + (result.correct ? 1 : 0),
+        missed,
       };
     });
     return result;
@@ -115,6 +146,18 @@ export const useRunStore = create<RunState>((set, get) => ({
       set({ phase: "error", errorMessage: (e as Error).message });
     }
   },
+
+  abortRun: () => {
+    const { runId, score, bestStreak } = get();
+    if (runId) {
+      api.finishRun(runId).catch(() => {});
+    }
+    persistLocalProgress(score, bestStreak);
+    set({ phase: "summary" });
+  },
+
+  startReview: () => set({ phase: "review" }),
+  exitReview: () => set({ phase: "summary" }),
 
   reset: () => set({ phase: "menu", errorMessage: undefined }),
 }));

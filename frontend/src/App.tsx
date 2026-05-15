@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 import { HUD } from "./components/HUD";
 import { Menu } from "./components/Menu";
+import { RunReview } from "./components/RunReview";
 import { RunSummary } from "./components/RunSummary";
 import { GameHost } from "./games/GameHost";
 import { useRunStore } from "./store/runStore";
@@ -38,6 +39,7 @@ export default function App() {
     );
   }
   if (phase === "summary") return <RunSummary />;
+  if (phase === "review") return <RunReview />;
 
   return (
     <div className="flex h-full flex-col">

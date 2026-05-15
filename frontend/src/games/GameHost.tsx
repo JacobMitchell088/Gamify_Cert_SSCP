@@ -22,6 +22,7 @@ export function GameHost() {
   const gameKey = useRunStore((s) => s.gameKey);
   const recordAnswer = useRunStore((s) => s.recordAnswer);
   const advance = useRunStore((s) => s.advance);
+  const abortRun = useRunStore((s) => s.abortRun);
 
   useEffect(() => {
     if (!containerRef.current || gameRef.current) return;
@@ -32,7 +33,9 @@ export function GameHost() {
       height: GAME_HEIGHT,
       backgroundColor: "#05060f",
       scene: [TowerDefenseScene, AsteroidAnswerScene],
-      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+      scale: { mode: Phaser.Scale.NONE },
+      render: { pixelArt: false, antialias: true, roundPixels: true },
+      disableContextMenu: true,
     });
     return () => {
       gameRef.current?.destroy(true);
@@ -61,13 +64,18 @@ export function GameHost() {
       onComplete: () => {
         void advance();
       },
+      abortRun,
     };
     game.scene.start(sceneKey, data);
-  }, [currentQuestion?.id, gameKey, recordAnswer, advance]);
+  }, [currentQuestion?.id, gameKey, recordAnswer, advance, abortRun]);
 
   return (
     <div className="relative flex flex-1 items-center justify-center bg-space-900">
-      <div ref={containerRef} className="overflow-hidden rounded-2xl border border-slate-700" />
+      <div
+        ref={containerRef}
+        className="overflow-hidden rounded-2xl border border-slate-700"
+        style={{ width: GAME_WIDTH, height: GAME_HEIGHT }}
+      />
     </div>
   );
 }

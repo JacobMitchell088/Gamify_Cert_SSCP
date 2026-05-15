@@ -57,13 +57,48 @@ async def _call_one(client: httpx.AsyncClient, api_key: str, model: str, domain:
     headers = {"Authorization": f"Bearer {api_key}"}
     try:
         r = await client.post(OPENROUTER_URL, json=payload, headers=headers, timeout=30.0)
-        r.raise_for_status()
-        data = r.json()
-        content = data["choices"][0]["message"]["content"]
-        return {"_model": model, **json.loads(content)}
-    except Exception as e:
-        logger.debug("openrouter call failed (%s): %s", model, e)
+    except httpx.RequestError as e:
+        logger.info("refill: %s network error: %s", model, e)
         return None
+
+    if r.status_code != 200:
+        body_preview = r.text[:200].replace("\n", " ")
+        logger.info("refill: %s HTTP %d — %s", model, r.status_code, body_preview)
+        return None
+
+    try:
+        data = r.json()
+    except ValueError:
+        logger.info("refill: %s returned non-JSON body: %s", model, r.text[:200])
+        return None
+
+    if "error" in data and "choices" not in data:
+        logger.info("refill: %s upstream error payload: %s", model, str(data.get("error"))[:200])
+        return None
+
+    try:
+        choices = data["choices"]
+        if not choices:
+            logger.info("refill: %s returned empty choices array", model)
+            return None
+        content = choices[0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as e:
+        logger.info("refill: %s unexpected response shape (%s): %s", model, e, str(data)[:200])
+        return None
+
+    if not content or not content.strip():
+        finish = (choices[0].get("finish_reason") if isinstance(choices[0], dict) else None)
+        logger.info("refill: %s returned empty content (finish_reason=%s)", model, finish)
+        return None
+
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError as e:
+        logger.info("refill: %s content was not valid JSON (%s): %s", model, e, content[:200])
+        return None
+
+    logger.info("refill: %s returned valid JSON payload", model)
+    return {"_model": model, **parsed}
 
 
 async def race_one_question(domain: Domain) -> dict | None:
@@ -100,6 +135,11 @@ async def maybe_refill_pool() -> None:
             return
 
         target_domain = random.choice(list(Domain))
+        logger.info(
+            "refill: starting — pool total=%d unused=%d threshold=%d target_domain=%s models=%s",
+            total, unused, settings.pool_refill_threshold, target_domain.value,
+            ",".join(settings.free_model_list),
+        )
         raw = await race_one_question(target_domain)
         if raw is None:
             logger.info("refill: no model returned a valid response this round")
@@ -107,11 +147,18 @@ async def maybe_refill_pool() -> None:
 
         winning_model = raw.pop("_model", "unknown")
         raw.setdefault("source", f"openrouter:{winning_model}")
+        logger.info(
+            "refill: winning model=%s; payload keys=%s; domain_field=%s",
+            winning_model, list(raw.keys()), raw.get("domain"),
+        )
         validated = validate_question(raw)
         if validated is None:
-            logger.info("refill: response rejected by schema (model=%s)", winning_model)
+            preview = {k: (str(v)[:120] if not isinstance(v, list) else v) for k, v in raw.items()}
+            logger.info("refill: response rejected by schema (model=%s) raw=%s", winning_model, preview)
             return
 
         ok = insert_question(session, validated)
         if ok:
             logger.info("refill: +1 question from %s (domain=%s)", winning_model, validated.domain)
+        else:
+            logger.info("refill: duplicate stem rejected at insert (model=%s)", winning_model)

@@ -5,8 +5,10 @@ export function RunSummary() {
   const totalAnswered = useRunStore((s) => s.totalAnswered);
   const totalCorrect = useRunStore((s) => s.totalCorrect);
   const bestStreak = useRunStore((s) => s.bestStreak);
+  const missedCount = useRunStore((s) => s.missed.length);
   const reset = useRunStore((s) => s.reset);
   const startRun = useRunStore((s) => s.startRun);
+  const startReview = useRunStore((s) => s.startReview);
 
   const accuracy = totalAnswered ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
 
@@ -22,8 +24,17 @@ export function RunSummary() {
         <span className="text-right">{totalCorrect} / {totalAnswered}</span>
         <span className="text-slate-400">Best streak</span>
         <span className="text-right">{bestStreak}</span>
+        <span className="text-slate-400">Missed</span>
+        <span className="text-right text-rose-300">{missedCount}</span>
       </div>
-      <div className="flex gap-4">
+      <div className="flex flex-wrap justify-center gap-4">
+        <button
+          onClick={startReview}
+          disabled={missedCount === 0}
+          className="rounded-xl border border-amber-500 px-8 py-3 font-semibold text-amber-200 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Review missed ({missedCount})
+        </button>
         <button
           onClick={() => void startRun()}
           className="rounded-xl bg-space-500 px-8 py-3 font-semibold hover:bg-indigo-500"
