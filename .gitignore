@@ -12,3 +12,10 @@ build/
 __pycache__/
 *.pyc
 coverage/
+.pytest_cache/
+.ruff_cache/
+*.db
+*.sqlite
+*.sqlite3
+.venv/
+backend/app/data/pool.db

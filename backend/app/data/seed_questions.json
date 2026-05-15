@@ -1,0 +1,184 @@
+[
+  {
+    "stem": "What does the 'CIA triad' stand for in information security?",
+    "options": [
+      "Confidentiality, Integrity, Availability",
+      "Control, Identification, Authentication",
+      "Cryptography, Identity, Access",
+      "Compliance, Investigation, Audit"
+    ],
+    "correct_index": 0,
+    "explanation": "The CIA triad is a foundational model: Confidentiality (preventing unauthorized disclosure), Integrity (preventing unauthorized modification), and Availability (ensuring authorized access when needed).",
+    "domain": "security_ops",
+    "source": "seed"
+  },
+  {
+    "stem": "Which document type defines mandatory, high-level statements of management intent that all employees must follow?",
+    "options": [
+      "Standard",
+      "Procedure",
+      "Policy",
+      "Guideline"
+    ],
+    "correct_index": 2,
+    "explanation": "A policy is a high-level, mandatory statement of management intent. Standards specify how to comply, procedures give step-by-step instructions, and guidelines are recommendations.",
+    "domain": "security_ops",
+    "source": "seed"
+  },
+  {
+    "stem": "Which access control model bases access decisions on labels assigned to subjects and objects, where the system (not the owner) enforces the policy?",
+    "options": [
+      "Discretionary Access Control (DAC)",
+      "Mandatory Access Control (MAC)",
+      "Role-Based Access Control (RBAC)",
+      "Attribute-Based Access Control (ABAC)"
+    ],
+    "correct_index": 1,
+    "explanation": "Mandatory Access Control uses security labels (such as classification levels) and is enforced by the system itself. Owners cannot override it, which is what distinguishes MAC from DAC.",
+    "domain": "access_controls",
+    "source": "seed"
+  },
+  {
+    "stem": "Authentication factors are commonly grouped into categories. Which of the following is an example of the 'something you are' factor?",
+    "options": [
+      "A hardware token",
+      "A password",
+      "A fingerprint",
+      "A smart card PIN"
+    ],
+    "correct_index": 2,
+    "explanation": "Biometrics such as fingerprints, iris scans, or facial recognition fall under 'something you are.' Passwords and PINs are 'something you know,' while tokens and smart cards are 'something you have.'",
+    "domain": "access_controls",
+    "source": "seed"
+  },
+  {
+    "stem": "In quantitative risk analysis, Annualized Loss Expectancy (ALE) is calculated as:",
+    "options": [
+      "SLE × ARO",
+      "SLE + ARO",
+      "Asset Value × Exposure Factor",
+      "Threat × Vulnerability"
+    ],
+    "correct_index": 0,
+    "explanation": "ALE = Single Loss Expectancy (SLE) × Annualized Rate of Occurrence (ARO). SLE itself is Asset Value × Exposure Factor, but the ALE formula combines SLE with how often the loss is expected per year.",
+    "domain": "risk",
+    "source": "seed"
+  },
+  {
+    "stem": "Which of the following is the BEST description of a false positive in a security monitoring context?",
+    "options": [
+      "An attack that the system failed to detect",
+      "A benign event that the system flagged as malicious",
+      "A malicious event that the system correctly identified",
+      "A misconfigured rule that prevents logging"
+    ],
+    "correct_index": 1,
+    "explanation": "A false positive is a benign event incorrectly flagged as malicious. A missed real attack is a false negative.",
+    "domain": "risk",
+    "source": "seed"
+  },
+  {
+    "stem": "What is the FIRST phase of the standard incident response lifecycle (NIST SP 800-61)?",
+    "options": [
+      "Detection and Analysis",
+      "Containment, Eradication, and Recovery",
+      "Preparation",
+      "Post-Incident Activity"
+    ],
+    "correct_index": 2,
+    "explanation": "NIST SP 800-61 defines Preparation as the first phase. Without preparation (training, tooling, runbooks), the later phases cannot be executed effectively.",
+    "domain": "incident_response",
+    "source": "seed"
+  },
+  {
+    "stem": "Which metric describes the maximum acceptable amount of data loss measured in time, after which the organization considers the loss unacceptable?",
+    "options": [
+      "RTO (Recovery Time Objective)",
+      "RPO (Recovery Point Objective)",
+      "MTTR (Mean Time To Repair)",
+      "MTBF (Mean Time Between Failures)"
+    ],
+    "correct_index": 1,
+    "explanation": "RPO is the maximum tolerable period of data loss. RTO is the time to restore service. MTTR and MTBF describe repair time and failure intervals respectively.",
+    "domain": "incident_response",
+    "source": "seed"
+  },
+  {
+    "stem": "Which cryptographic property ensures that a sender cannot later deny having sent a message?",
+    "options": [
+      "Confidentiality",
+      "Integrity",
+      "Non-repudiation",
+      "Availability"
+    ],
+    "correct_index": 2,
+    "explanation": "Non-repudiation, typically achieved with digital signatures, binds an action to an identity such that the actor cannot credibly deny it.",
+    "domain": "cryptography",
+    "source": "seed"
+  },
+  {
+    "stem": "Which of the following is a symmetric block cipher?",
+    "options": [
+      "RSA",
+      "AES",
+      "Diffie-Hellman",
+      "ECC"
+    ],
+    "correct_index": 1,
+    "explanation": "AES (Advanced Encryption Standard) is a symmetric block cipher. RSA and ECC are asymmetric algorithms; Diffie-Hellman is a key-exchange protocol.",
+    "domain": "cryptography",
+    "source": "seed"
+  },
+  {
+    "stem": "At which OSI layer does TLS primarily operate?",
+    "options": [
+      "Network (Layer 3)",
+      "Transport (Layer 4)",
+      "Session/Presentation (Layers 5/6)",
+      "Application (Layer 7)"
+    ],
+    "correct_index": 2,
+    "explanation": "TLS operates above the transport layer, typically described as Layer 5/6 (session/presentation), securing communications for application-layer protocols like HTTPS.",
+    "domain": "network",
+    "source": "seed"
+  },
+  {
+    "stem": "Which network device or function decides whether to forward or block traffic based on a defined rule set?",
+    "options": [
+      "Hub",
+      "Switch",
+      "Firewall",
+      "Repeater"
+    ],
+    "correct_index": 2,
+    "explanation": "A firewall enforces an access control rule set on network traffic. Hubs and repeaters operate at the physical layer; switches forward frames based on MAC addresses without applying security policy by default.",
+    "domain": "network",
+    "source": "seed"
+  },
+  {
+    "stem": "Which type of malware encrypts a victim's files and demands payment for the decryption key?",
+    "options": [
+      "Worm",
+      "Rootkit",
+      "Ransomware",
+      "Adware"
+    ],
+    "correct_index": 2,
+    "explanation": "Ransomware encrypts data and demands payment for recovery. Worms self-propagate, rootkits hide presence and provide persistent privileged access, and adware displays unwanted ads.",
+    "domain": "sys_app_security",
+    "source": "seed"
+  },
+  {
+    "stem": "Which secure software development practice involves validating data at the point where untrusted input enters the system?",
+    "options": [
+      "Input validation",
+      "Output encoding",
+      "Privilege escalation",
+      "Code obfuscation"
+    ],
+    "correct_index": 0,
+    "explanation": "Input validation at the trust boundary is a primary defense against injection, buffer overflow, and many other classes of vulnerability. Output encoding is a complementary control for rendering, not entry.",
+    "domain": "sys_app_security",
+    "source": "seed"
+  }
+]
