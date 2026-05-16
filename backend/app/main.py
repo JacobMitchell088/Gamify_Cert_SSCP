@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .db import get_session, init_db
 from .routers import health, reports, runs
-from .services.openrouter import maybe_refill_pool
+from .services.openrouter import maybe_refill_pool, probe_models
 from .services.pool import load_seed_if_empty
 
 logging.basicConfig(level=logging.INFO)
@@ -24,12 +24,19 @@ async def lifespan(app: FastAPI):
 
     scheduler: AsyncIOScheduler | None = None
     if settings.openrouter_api_key and settings.free_model_list:
+        # Health-probe the model list first so bad slugs are surfaced loudly
+        # and never burn refill cycles. Probe errors are non-fatal.
+        try:
+            await probe_models()
+        except Exception:  # noqa: BLE001
+            logger.exception("[openrouter] startup probe failed (continuing)")
+
         scheduler = AsyncIOScheduler()
         scheduler.add_job(maybe_refill_pool, "interval", seconds=30, max_instances=1)
         scheduler.start()
-        logger.info("openrouter refill scheduler started")
+        logger.info("[openrouter] refill scheduler started interval=30s")
     else:
-        logger.info("openrouter disabled (no API key or model list) — running on seed only")
+        logger.info("[openrouter] disabled reason=no_api_key_or_models")
 
     try:
         yield
