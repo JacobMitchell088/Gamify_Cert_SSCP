@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .db import get_session, init_db
-from .routers import health, runs
+from .routers import health, reports, runs
 from .services.openrouter import maybe_refill_pool
 from .services.pool import load_seed_if_empty
 
@@ -52,6 +52,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(runs.router)
+    app.include_router(reports.router)
     return app
 
 

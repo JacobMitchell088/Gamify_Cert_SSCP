@@ -27,4 +27,12 @@ export const api = {
       `/run/${runId}/finish`,
       { method: "POST" },
     ),
+  reportQuestion: (
+    questionId: number,
+    payload: { reason: string; had_answered: boolean; player_pick: number | null },
+  ) =>
+    jsonFetch<{ ok: boolean; report_id: number }>(`/question/${questionId}/report`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };

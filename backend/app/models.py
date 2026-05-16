@@ -112,3 +112,28 @@ class PoolStats(BaseModel):
     total: int
     unused: int
     by_domain: dict[str, int]
+
+
+class QuestionReport(SQLModel, table=True):
+    """Player-submitted report on a question (typo, wrong answer, ambiguous, etc.).
+
+    Snapshots stem/options/correct_index at report time so the record stays
+    intelligible even if the question is later edited or regenerated.
+    """
+
+    id: int | None = SQLField(default=None, primary_key=True)
+    question_id: int = SQLField(index=True)
+    reason: str
+    stem_snapshot: str
+    options_snapshot: str  # JSON-encoded list[str]
+    correct_index_snapshot: int
+    had_answered: bool = False
+    player_pick: int | None = None
+    user_agent: str | None = None
+    created_at: float = SQLField(index=True)
+
+
+class ReportIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
+    had_answered: bool = False
+    player_pick: int | None = Field(default=None, ge=0, le=3)

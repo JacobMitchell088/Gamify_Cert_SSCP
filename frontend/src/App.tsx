@@ -2,6 +2,7 @@ import { useEffect } from "react";
 
 import { HUD } from "./components/HUD";
 import { Menu } from "./components/Menu";
+import { ReportButton } from "./components/ReportButton";
 import { RunReview } from "./components/RunReview";
 import { RunSummary } from "./components/RunSummary";
 import { GameHost } from "./games/GameHost";
@@ -45,6 +46,7 @@ export default function App() {
     <div className="flex h-full flex-col">
       <HUD />
       <GameHost />
+      <ReportButton />
     </div>
   );
 }

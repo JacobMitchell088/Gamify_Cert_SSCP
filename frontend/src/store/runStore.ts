@@ -25,6 +25,8 @@ interface RunState {
   isFinalBatch: boolean;
   queue: Question[];
   currentQuestion?: Question;
+  /** Index the player picked for the current question, or undefined before answer. */
+  currentChoice?: number;
   score: number;
   streak: number;
   bestStreak: number;
@@ -55,6 +57,7 @@ function loadBatchIntoState(
     isFinalBatch: b.is_final,
     queue: rest,
     currentQuestion: head,
+    currentChoice: undefined,
     phase: "playing",
   };
 }
@@ -100,6 +103,7 @@ export const useRunStore = create<RunState>((set, get) => ({
       return { correct: false, correct_index: -1, explanation: "" };
     }
     const result = await api.submitAnswer(runId, currentQuestion.id, chosenIndex);
+    set({ currentChoice: chosenIndex });
     set((s) => {
       const newStreak = result.correct ? s.streak + 1 : 0;
       const missed = result.correct
@@ -134,6 +138,7 @@ export const useRunStore = create<RunState>((set, get) => ({
       set({
         currentQuestion: queue[0],
         queue: queue.slice(1),
+        currentChoice: undefined,
       });
       return;
     }
