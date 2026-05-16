@@ -20,6 +20,7 @@ interface RunState {
   errorMessage?: string;
   runId?: number;
   gameKey?: string;
+  selectedGameKey: string;
   batchIndex: number;
   isFinalBatch: boolean;
   queue: Question[];
@@ -30,6 +31,7 @@ interface RunState {
   totalAnswered: number;
   totalCorrect: number;
   missed: MissedQuestion[];
+  setSelectedGame: (key: string) => void;
   startRun: () => Promise<void>;
   recordAnswer: (chosenIndex: number) => Promise<AnswerResult>;
   advance: () => Promise<void>;
@@ -39,12 +41,16 @@ interface RunState {
   reset: () => void;
 }
 
-function loadBatchIntoState(s: Partial<RunState>, b: Batch): Partial<RunState> {
+function loadBatchIntoState(
+  s: Partial<RunState>,
+  b: Batch,
+  forcedGameKey?: string,
+): Partial<RunState> {
   const [head, ...rest] = b.questions;
   return {
     ...s,
     runId: b.run_id,
-    gameKey: b.game_key,
+    gameKey: forcedGameKey ?? b.game_key,
     batchIndex: b.batch_index,
     isFinalBatch: b.is_final,
     queue: rest,
@@ -64,11 +70,15 @@ export const useRunStore = create<RunState>((set, get) => ({
   totalAnswered: 0,
   totalCorrect: 0,
   missed: [],
+  selectedGameKey: "tower_defense",
+
+  setSelectedGame: (key: string) => set({ selectedGameKey: key }),
 
   startRun: async () => {
     set({ phase: "loading", errorMessage: undefined });
     try {
       const batch = await api.startRun();
+      const choice = get().selectedGameKey;
       set((s) => ({
         ...s,
         score: 0,
@@ -77,7 +87,7 @@ export const useRunStore = create<RunState>((set, get) => ({
         totalAnswered: 0,
         totalCorrect: 0,
         missed: [],
-        ...loadBatchIntoState(s, batch),
+        ...loadBatchIntoState(s, batch, choice),
       }));
     } catch (e) {
       set({ phase: "error", errorMessage: (e as Error).message });
@@ -138,10 +148,15 @@ export const useRunStore = create<RunState>((set, get) => ({
       set({ phase: "summary" });
       return;
     }
-    set({ phase: "loading" });
+    // Do NOT set phase: "loading" here — it would unmount GameHost between
+    // batches, destroying the Phaser.Game and wiping the per-scene registry
+    // (which is where TD/RPG persist their HP and progress). Keep GameHost
+    // mounted; the scene stays on the feedback panel while the new batch
+    // arrives, then re-inits with the next question.
     try {
       const batch = await api.nextBatch(runId);
-      set((s) => ({ ...loadBatchIntoState(s, batch) }));
+      const choice = get().selectedGameKey;
+      set((s) => ({ ...loadBatchIntoState(s, batch, choice) }));
     } catch (e) {
       set({ phase: "error", errorMessage: (e as Error).message });
     }
