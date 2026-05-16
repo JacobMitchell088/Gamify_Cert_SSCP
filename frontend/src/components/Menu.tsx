@@ -29,6 +29,24 @@ const GAMES: GameOption[] = [
     available: true,
   },
   {
+    key: "vault_lockdown",
+    title: "Vault Lockdown",
+    tagline: "Strategy · Hold the perimeter",
+    description:
+      "Six threat paths close in on a central vault. Correct answer = place a lock on the path of your choice; wrong = attackers gain an extra step. Locks soak one hit each. Don't let any path reach the vault.",
+    accent: "border-cyan-500 text-cyan-300",
+    available: true,
+  },
+  {
+    key: "patch_tuesday",
+    title: "Patch Tuesday",
+    tagline: "Roguelike · Deckbuilding autobattler",
+    description:
+      "Build a deck of countermeasure cards (Firewall, IDS, AES-256, more). Each correct answer drafts a new card; wrong answers let the exploit slam your field. Cards auto-battle the incoming exploit each wave. Hold the infra for 30 waves.",
+    accent: "border-violet-500 text-violet-300",
+    available: true,
+  },
+  {
     key: "asteroid_answer",
     title: "Asteroid Answer Run",
     tagline: "Arcade · Pilot the right portal",
