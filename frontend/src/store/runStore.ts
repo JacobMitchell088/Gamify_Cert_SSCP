@@ -148,7 +148,11 @@ export const useRunStore = create<RunState>((set, get) => ({
       set({ phase: "summary" });
       return;
     }
-    set({ phase: "loading" });
+    // Do NOT set phase: "loading" here — it would unmount GameHost between
+    // batches, destroying the Phaser.Game and wiping the per-scene registry
+    // (which is where TD/RPG persist their HP and progress). Keep GameHost
+    // mounted; the scene stays on the feedback panel while the new batch
+    // arrives, then re-inits with the next question.
     try {
       const batch = await api.nextBatch(runId);
       const choice = get().selectedGameKey;

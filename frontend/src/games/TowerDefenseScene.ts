@@ -603,15 +603,51 @@ export class TowerDefenseScene extends Phaser.Scene {
       .setOrigin(0.5, 0);
     const stemH = stem.height;
 
+    // ---------- Pre-measure option cards so they grow to fit the longest answer ----------
+    // All four cards must stay the same size (per design), so we size every card
+    // to the tallest wrapped option text. This is computed BEFORE we place the
+    // stem card so the stem band can reclaim any unused vertical space.
+    const cardW = 210;
+    const optionFontPx = 14;
+    const optionWrapW = cardW - 28;
+    const optionPadTop = 30; // letter row + breathing room
+    const optionPadBottom = 14;
+    const minCardH = 120;
+    const maxCardH = 200;
+    let tallestOption = 0;
+    const measureProbes: Phaser.GameObjects.Text[] = [];
+    for (const opt of this.question.options) {
+      const probe = this.add
+        .text(0, 0, opt, {
+          fontFamily: "system-ui, sans-serif",
+          fontSize: `${optionFontPx}px`,
+          color: "#f1f5f9",
+          align: "center",
+          wordWrap: { width: optionWrapW },
+          lineSpacing: 3,
+        })
+        .setVisible(false);
+      measureProbes.push(probe);
+      if (probe.height > tallestOption) tallestOption = probe.height;
+    }
+    for (const p of measureProbes) p.destroy();
+    const cardH = Phaser.Math.Clamp(
+      tallestOption + optionPadTop + optionPadBottom,
+      minCardH,
+      maxCardH,
+    );
+    const optionBottomMargin = 18;
+    const optionY = GAME_HEIGHT - cardH / 2 - optionBottomMargin;
+    const optionTopY = optionY - cardH / 2;
+
     // Available vertical space sits between the HUD (~56) and the option row top.
+    const bandTop = 64;
+    const bandBottom = optionTopY - 12;
+    const maxBoxH = Math.max(minCardH, bandBottom - bandTop);
     const minBoxH = 96;
-    const maxBoxH = 420;
     const computedBoxH = padTop + labelH + labelGap + stemH + padBottom;
     const stemBoxH = Phaser.Math.Clamp(computedBoxH, minBoxH, maxBoxH);
 
-    // Option row top sits at GAME_HEIGHT - cardH(120) - 18 = bottom-138.
-    const bandTop = 64;
-    const bandBottom = GAME_HEIGHT - 150;
     const boxTop = Phaser.Math.Clamp(
       (bandTop + bandBottom) / 2 - stemBoxH / 2,
       bandTop,
@@ -637,16 +673,13 @@ export class TowerDefenseScene extends Phaser.Scene {
 
     panel.add([stemBg, stemLabel, stem]);
 
-    const cardW = 210;
-    const cardH = 120;
     const gap = 14;
     const totalW = cardW * 4 + gap * 3;
     const startX = (GAME_WIDTH - totalW) / 2;
-    const y = GAME_HEIGHT - cardH / 2 - 18;
 
     this.question.options.forEach((opt, i) => {
       const x = startX + i * (cardW + gap) + cardW / 2;
-      const card = this.makeOptionCard(x, y, cardW, cardH, opt, i);
+      const card = this.makeOptionCard(x, optionY, cardW, cardH, opt, i);
       panel.add(card);
     });
 
@@ -1377,11 +1410,12 @@ export class TowerDefenseScene extends Phaser.Scene {
     const titleColor = held ? "#4ade80" : "#ef4444";
 
     const panel = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2);
-    const bg = this.add
-      .rectangle(0, 0, 680, 320, 0x0a0d1f, 0.97)
-      .setStrokeStyle(2, held ? 0x4ade80 : 0xef4444);
+    const accent = held ? 0x4ade80 : 0xef4444;
+
+    // Build each text element first so we can read its measured .height,
+    // then size the bg and place rows so nothing overlaps.
     const titleText = this.add
-      .text(0, -126, title, {
+      .text(0, 0, title, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "26px",
         color: titleColor,
@@ -1395,7 +1429,7 @@ export class TowerDefenseScene extends Phaser.Scene {
         ? `Answer: WRONG  ·  Correct was: ${this.question.options[result.correct_index]}`
         : "Answer: WRONG";
     const ansText = this.add
-      .text(0, -84, ansLine, {
+      .text(0, 0, ansLine, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "15px",
         color: result.correct ? "#86efac" : "#fca5a5",
@@ -1407,7 +1441,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const explanation = this.add
-      .text(0, -16, result.explanation || "—", {
+      .text(0, 0, result.explanation || "—", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "14px",
         color: "#cbd5f5",
@@ -1420,7 +1454,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     const stats = this.add
       .text(
         0,
-        86,
+        0,
         `Core HP: ${Math.max(0, this.state.coreHp)} / 100   (-${hpLost})    Towers: ${this.state.towers.length}`,
         {
           fontFamily: "system-ui, sans-serif",
@@ -1430,30 +1464,75 @@ export class TowerDefenseScene extends Phaser.Scene {
       )
       .setOrigin(0.5);
 
+    const hint = this.add
+      .text(0, 0, "(or press SPACE)", {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "11px",
+        color: "#64748b",
+      })
+      .setOrigin(0.5);
+
+    const padTop = 22;
+    const padBottom = 18;
+    const gapTitleAns = 16;
+    const gapAnsExp = 16;
+    const gapExpStats = 22;
+    const gapStatsBtn = 18;
+    const gapBtnHint = 8;
+    const btnH = 44;
+    const panelW = 680;
+    const minPanelH = 260;
+    const maxPanelH = GAME_HEIGHT - 60;
+
+    const contentH =
+      padTop +
+      titleText.height +
+      gapTitleAns +
+      ansText.height +
+      gapAnsExp +
+      explanation.height +
+      gapExpStats +
+      stats.height +
+      gapStatsBtn +
+      btnH +
+      gapBtnHint +
+      hint.height +
+      padBottom;
+    const panelH = Phaser.Math.Clamp(contentH, minPanelH, maxPanelH);
+
+    const bg = this.add
+      .rectangle(0, 0, panelW, panelH, 0x0a0d1f, 0.97)
+      .setStrokeStyle(2, accent);
+
+    let y = -panelH / 2 + padTop;
+    titleText.setY(y + titleText.height / 2);
+    y += titleText.height + gapTitleAns;
+    ansText.setY(y + ansText.height / 2);
+    y += ansText.height + gapAnsExp;
+    explanation.setY(y + explanation.height / 2);
+    y += explanation.height + gapExpStats;
+    stats.setY(y + stats.height / 2);
+    y += stats.height + gapStatsBtn;
+    const btnY = y + btnH / 2;
+    y += btnH + gapBtnHint;
+    hint.setY(y + hint.height / 2);
+
     const btnBg = this.add
-      .rectangle(0, 130, 220, 44, 0x3b3fff, 1)
+      .rectangle(0, btnY, 220, btnH, 0x3b3fff, 1)
       .setStrokeStyle(1, 0x7af0ff);
     const btnText = this.add
-      .text(0, 130, "Continue ▶", {
+      .text(0, btnY, "Continue ▶", {
         fontFamily: "system-ui, sans-serif",
         fontSize: "15px",
         color: "#ffffff",
         fontStyle: "bold",
       })
       .setOrigin(0.5);
-    const btnHit = this.add.zone(0, 130, 220, 44).setOrigin(0.5);
+    const btnHit = this.add.zone(0, btnY, 220, btnH).setOrigin(0.5);
     btnHit.setInteractive({ useHandCursor: true });
     btnHit.on("pointerover", () => btnBg.setFillStyle(0x4f46e5));
     btnHit.on("pointerout", () => btnBg.setFillStyle(0x3b3fff));
     btnHit.on("pointerdown", () => this.onComplete());
-
-    const hint = this.add
-      .text(0, 156, "(or press SPACE)", {
-        fontFamily: "system-ui, sans-serif",
-        fontSize: "11px",
-        color: "#64748b",
-      })
-      .setOrigin(0.5);
 
     panel.add([bg, titleText, ansText, explanation, stats, btnBg, btnText, btnHit, hint]);
     this.layerUi.add(panel);
