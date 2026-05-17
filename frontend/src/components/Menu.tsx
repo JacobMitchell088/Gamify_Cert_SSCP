@@ -67,14 +67,13 @@ const GAMES: GameOption[] = [
 ];
 
 export function Menu() {
-  const startRun = useRunStore((s) => s.startRun);
   const setSelectedGame = useRunStore((s) => s.setSelectedGame);
   const selectedGameKey = useRunStore((s) => s.selectedGameKey);
   const progress = readLocalProgress();
 
   const onPlay = (key: string) => {
     setSelectedGame(key);
-    void startRun();
+    useRunStore.setState({ phase: "overview", errorMessage: undefined });
   };
 
   return (
