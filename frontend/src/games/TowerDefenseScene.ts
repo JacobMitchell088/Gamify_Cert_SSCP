@@ -79,7 +79,7 @@ interface TowerState {
 
 // ----------------------- Creeps -----------------------
 
-type CreepType = "scout" | "brute" | "stalker";
+type CreepType = "scout" | "brute" | "stalker" | "bat";
 
 interface CreepDef {
   name: string;
@@ -89,8 +89,14 @@ interface CreepDef {
   color: number;
   innerColor: number;
   damageOnLeak: number;
+  /** sprite key suffix; full key is `td_${spriteKey}` */
+  spriteKey: string;
+  /** Render scale on the 24×24 spritesheet frames. */
+  scale: number;
   /** stalker only: lunge speed multiplier */
   lunge?: { every: number; duration: number; mult: number };
+  /** bat only: periodic AOE heal of nearby creeps. */
+  heal?: { every: number; radius: number; amount: number };
 }
 
 const CREEP_DEFS: Record<CreepType, CreepDef> = {
@@ -98,29 +104,47 @@ const CREEP_DEFS: Record<CreepType, CreepDef> = {
     name: "Scout",
     baseHp: 40,
     baseSpeed: 0.115,
-    radius: 6,
+    radius: 10,
     color: 0xfca5a5,
     innerColor: 0xfee2e2,
     damageOnLeak: 8,
+    spriteKey: "scout",
+    scale: 1.5,
   },
   brute: {
     name: "Brute",
     baseHp: 160,
     baseSpeed: 0.055,
-    radius: 14,
+    radius: 20,
     color: 0xb91c1c,
     innerColor: 0xfecaca,
     damageOnLeak: 22,
+    spriteKey: "brute",
+    scale: 2.3,
   },
   stalker: {
     name: "Stalker",
     baseHp: 85,
     baseSpeed: 0.08,
-    radius: 9,
+    radius: 14,
     color: 0xa855f7,
     innerColor: 0xe9d5ff,
     damageOnLeak: 14,
+    spriteKey: "stalker",
+    scale: 1.9,
     lunge: { every: 1900, duration: 420, mult: 2.4 },
+  },
+  bat: {
+    name: "Bat (Medic)",
+    baseHp: 55,
+    baseSpeed: 0.115,
+    radius: 9,
+    color: 0x86efac,
+    innerColor: 0xd1fae5,
+    damageOnLeak: 10,
+    spriteKey: "bat",
+    scale: 1.4,
+    heal: { every: 1800, radius: 70, amount: 6 },
   },
 };
 
@@ -130,38 +154,53 @@ interface PersistentState {
   coreHp: number;
   towers: TowerState[];
   nextTowerId: number;
+  /** Permanent escalation counter — every wrong answer bumps future wave size + spawn rate. */
+  wrongAnswers: number;
 }
 
-const REGISTRY_KEY = "td_state_v4";
+const REGISTRY_KEY = "td_state_v5";
+
+/** Permanent penalty applied to every future wave per wrong answer. */
+const WRONG_EXTRA_ENEMIES_PER = 2;
+const WRONG_SPAWN_INTERVAL_DELTA_MS = 12;
 
 // ----------------------- Wave config -----------------------
 
-function buildWaveQueue(qIndex: number): CreepType[] {
-  const total = Math.min(24, 4 + Math.floor(qIndex * 1.2));
-  const pBrute = qIndex < 3 ? 0 : Math.min(0.38, (qIndex - 2) * 0.055);
-  const pStalker = qIndex < 5 ? 0 : Math.min(0.38, (qIndex - 4) * 0.055);
+function buildWaveQueue(qIndex: number, wrongCount: number): CreepType[] {
+  // Easier opening (Q0 starts at 3) but ramps up faster than the old curve.
+  const base = 3 + Math.floor(qIndex * 1.35);
+  const wrongBonus = wrongCount * WRONG_EXTRA_ENEMIES_PER;
+  const total = Math.min(36, base + wrongBonus);
+  // Bats join the menagerie a bit earlier than brutes; they're support, not bruisers.
+  const pBat = qIndex < 4 ? 0 : Math.min(0.18, (qIndex - 3) * 0.028);
+  const pBrute = qIndex < 3 ? 0 : Math.min(0.32, (qIndex - 2) * 0.052);
+  const pStalker = qIndex < 5 ? 0 : Math.min(0.32, (qIndex - 4) * 0.052);
   const list: CreepType[] = [];
   for (let i = 0; i < total; i++) {
     const r = Math.random();
-    if (r < pBrute) list.push("brute");
-    else if (r < pBrute + pStalker) list.push("stalker");
+    if (r < pBat) list.push("bat");
+    else if (r < pBat + pBrute) list.push("brute");
+    else if (r < pBat + pBrute + pStalker) list.push("stalker");
     else list.push("scout");
   }
   return list;
 }
 
-function waveScaling(qIndex: number) {
+function waveScaling(qIndex: number, wrongCount: number) {
+  // Spawn interval shrinks faster than before: Q0=700ms (same), Q10=480ms, Q20=260ms,
+  // floor at 200ms. Wrong answers shave further on top of that, forever.
+  const interval = 700 - qIndex * 22 - wrongCount * WRONG_SPAWN_INTERVAL_DELTA_MS;
   return {
     hpMult: 1 + qIndex * 0.105,
     speedMult: 1 + qIndex * 0.016,
-    spawnInterval: Math.max(320, 700 - qIndex * 15),
+    spawnInterval: Math.max(200, interval),
   };
 }
 
 interface Creep {
   type: CreepType;
   sprite: Phaser.GameObjects.Container;
-  body: Phaser.GameObjects.Arc;
+  body: Phaser.GameObjects.Sprite;
   hpBar: Phaser.GameObjects.Rectangle;
   hpBarBg: Phaser.GameObjects.Rectangle;
   hp: number;
@@ -169,9 +208,11 @@ interface Creep {
   progress: number;
   baseSpeed: number;
   currentSpeed: number;
-  // Lunge state
+  // Lunge state (stalker)
   nextLungeAt: number;
   lungeEndsAt: number;
+  // Heal pulse state (bat)
+  nextHealAt: number;
   alive: boolean;
 }
 
@@ -239,6 +280,17 @@ export class TowerDefenseScene extends Phaser.Scene {
     super({ key: "TowerDefenseScene" });
   }
 
+  preload() {
+    for (const key of ["scout", "brute", "stalker", "bat"] as const) {
+      const texKey = `td_${key}`;
+      if (this.textures.exists(texKey)) continue;
+      this.load.spritesheet(texKey, `/sprites/td/${key}.png`, {
+        frameWidth: 24,
+        frameHeight: 24,
+      });
+    }
+  }
+
   init(data: SceneData) {
     // Phaser auto-boots the first scene at game start with no data. Skip wiring
     // until GameHost explicitly restarts us with a real SceneData payload.
@@ -260,6 +312,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     if (!this.question) return;
     this.cameras.main.setBackgroundColor("#070a18");
     this.loadOrInitState();
+    this.ensureCreepAnimations();
 
     this.layerWorld = this.add.container(0, 0);
     this.layerEffects = this.add.container(0, 0);
@@ -274,6 +327,23 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.startAnswering();
   }
 
+  private ensureCreepAnimations() {
+    for (const key of ["scout", "brute", "stalker", "bat"] as const) {
+      const texKey = `td_${key}`;
+      const animKey = `${texKey}_walk`;
+      const tex = this.textures.get(texKey);
+      // Pixel-art creeps shouldn't get bilinear smoothing.
+      if (tex && tex.key !== "__MISSING") tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      if (this.anims.exists(animKey)) continue;
+      this.anims.create({
+        key: animKey,
+        frames: this.anims.generateFrameNumbers(texKey, { start: 0, end: 3 }),
+        frameRate: 8,
+        repeat: -1,
+      });
+    }
+  }
+
   update(time: number, delta: number) {
     if (this.phase === "placing") this.updatePlacementPreview();
     if (this.phase === "wave") this.tickWave(time, delta);
@@ -284,6 +354,8 @@ export class TowerDefenseScene extends Phaser.Scene {
   private loadOrInitState() {
     const existing = this.registry.get(REGISTRY_KEY) as PersistentState | undefined;
     if (existing) {
+      // Defensive: an older in-memory shape might be missing wrongAnswers.
+      if (existing.wrongAnswers === undefined) existing.wrongAnswers = 0;
       this.state = existing;
       return;
     }
@@ -293,6 +365,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       coreHp: 100,
       towers: [],
       nextTowerId: 1,
+      wrongAnswers: 0,
     };
     this.registry.set(REGISTRY_KEY, this.state);
   }
@@ -449,10 +522,16 @@ export class TowerDefenseScene extends Phaser.Scene {
       const spikes = 8;
       const outer = 26;
       const inner = 14;
+      // Phaser.GameObjects.Polygon.updateData() pushes vertex coords raw
+      // without subtracting bounds.x/bounds.y, so negative coords leave the
+      // displayOrigin math off — the star ends up rendered to the upper-left
+      // of the container origin by (outer, outer). Pre-translate every vertex
+      // by (+outer, +outer) so all points land in [0, 2*outer] × [0, 2*outer]
+      // and Phaser's bbox-center / displayOrigin alignment works out.
       for (let i = 0; i < spikes * 2; i++) {
         const r = i % 2 === 0 ? outer : inner;
         const a = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2;
-        pts.push(Math.cos(a) * r, Math.sin(a) * r);
+        pts.push(Math.cos(a) * r + outer, Math.sin(a) * r + outer);
       }
       starShape = this.add.polygon(0, 0, pts, def.color, 0.35);
       starShape.setStrokeStyle(1, def.color, 0.7);
@@ -468,15 +547,23 @@ export class TowerDefenseScene extends Phaser.Scene {
       body = this.add.rectangle(0, 0, bodyRadius * 1.6, bodyRadius * 1.6, baseColor, bodyAlpha);
       body.setRotation(Math.PI / 4);
     } else {
+      // Phaser.GameObjects.Triangle computes its size as Math.max(x1,x2,x3) ×
+      // Math.max(y1,y2,y3) — it assumes vertex coords are in [0, W] × [0, H].
+      // Negative coords break that math and skew the displayOrigin so the
+      // shape renders well off-center from the container origin. Build the
+      // triangle inside a positive 2r × 2r local box so the computed width
+      // and height are correct and displayOrigin lands on the true bbox
+      // center — that's what puts the visual center on the cursor.
+      const d = 2 * bodyRadius;
       body = this.add.triangle(
         0,
         0,
+        bodyRadius, // apex (top-center)
         0,
-        -bodyRadius,
-        bodyRadius,
-        bodyRadius,
-        -bodyRadius,
-        bodyRadius,
+        d, // base right (bottom-right)
+        d,
+        0, // base left (bottom-left)
+        d,
         baseColor,
         bodyAlpha,
       );
@@ -751,6 +838,11 @@ export class TowerDefenseScene extends Phaser.Scene {
     if (result.correct) {
       this.startChoosing();
     } else {
+      // Permanent escalation: every wrong answer makes ALL future waves carry
+      // more enemies and spill them out faster. Bump the counter BEFORE the
+      // wave queue is built so the very next wave already feels the penalty.
+      this.state.wrongAnswers += 1;
+      this.saveState();
       const type = TOWER_TYPES[Phaser.Math.Between(0, 2)];
       this.startPlacement(type, true);
     }
@@ -1000,8 +1092,12 @@ export class TowerDefenseScene extends Phaser.Scene {
     const banner = this.add
       .rectangle(GAME_WIDTH / 2, 34, GAME_WIDTH - 280, 50, 0x0a0d1f, 0.92)
       .setStrokeStyle(1, headColor, 0.7);
+    const escalation =
+      this.state.wrongAnswers > 0
+        ? `  ·  +${this.state.wrongAnswers * WRONG_EXTRA_ENEMIES_PER} enemies every wave (from ${this.state.wrongAnswers} wrong)`
+        : "";
     const title = weak
-      ? `WRONG ANSWER  ·  Place a weak ${def.name}`
+      ? `WRONG ANSWER  ·  Place a weak ${def.name}${escalation}`
       : `Place your ${def.name} (Tier 1)`;
     const text = this.add
       .text(GAME_WIDTH / 2, 34, title, {
@@ -1055,9 +1151,25 @@ export class TowerDefenseScene extends Phaser.Scene {
     const range = this.add
       .circle(0, 0, this.computeRange(state), def.color, 0.08)
       .setStrokeStyle(2, def.color, 0.5);
-    const body = this.add
-      .circle(0, 0, 12, def.color, state.weak ? 0.45 : 0.85)
-      .setStrokeStyle(2, 0xffffff, 0.8);
+
+    // Match the actual placed tower's tier-1 shape so the preview can't drift
+    // from the final body. Triangle gets the same centroid correction as the
+    // real Triburst in spawnTowerVisual.
+    const r = 12;
+    const bodyAlpha = state.weak ? 0.45 : 0.85;
+    let body: Phaser.GameObjects.Shape;
+    if (state.type === "aoe") {
+      body = this.add.circle(0, 0, r, def.color, bodyAlpha);
+    } else if (state.type === "sniper") {
+      body = this.add.rectangle(0, 0, r * 1.6, r * 1.6, def.color, bodyAlpha);
+      body.setRotation(Math.PI / 4);
+    } else {
+      // See spawnTowerVisual for why this uses positive-coord vertices.
+      const d = 2 * r;
+      body = this.add.triangle(0, 0, r, 0, d, d, 0, d, def.color, bodyAlpha);
+    }
+    body.setStrokeStyle(2, 0xffffff, 0.8);
+
     const label = this.add
       .text(0, -26, `${def.short} T1${state.weak ? " (weak)" : ""}`, {
         fontFamily: "system-ui, sans-serif",
@@ -1083,7 +1195,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.placementPreview.y = y;
     const valid = this.isValidPlacement(x, y);
     const range = this.placementPreview.getData("range") as Phaser.GameObjects.Arc;
-    const body = this.placementPreview.getData("body") as Phaser.GameObjects.Arc;
+    const body = this.placementPreview.getData("body") as Phaser.GameObjects.Shape;
     if (valid) {
       range.setStrokeStyle(2, TOWER_DEFS[this.placementType].color, 0.6);
       body.setStrokeStyle(2, 0xffffff, 1);
@@ -1143,7 +1255,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.clearPanel();
 
     const qIndex = this.state.questionsAnswered;
-    this.waveQueue = buildWaveQueue(qIndex);
+    this.waveQueue = buildWaveQueue(qIndex, this.state.wrongAnswers);
     this.nextSpawnAt = this.time.now + 250;
     this.creeps = [];
     this.waveStartCoreHp = this.state.coreHp;
@@ -1154,14 +1266,19 @@ export class TowerDefenseScene extends Phaser.Scene {
       v.nextFireAt = this.time.now + 200;
     }
 
-    const counts = { scout: 0, brute: 0, stalker: 0 };
+    const counts = { scout: 0, brute: 0, stalker: 0, bat: 0 };
     for (const t of this.waveQueue) counts[t]++;
+    const escalationSuffix =
+      this.state.wrongAnswers > 0
+        ? `  ·  +${this.state.wrongAnswers * WRONG_EXTRA_ENEMIES_PER} from wrong answers`
+        : "";
     const summary = `Wave ${qIndex + 1}  ·  ${this.waveQueue.length} hostiles  ·  ` +
       [
         counts.scout ? `${counts.scout} scout` : "",
         counts.brute ? `${counts.brute} brute` : "",
         counts.stalker ? `${counts.stalker} stalker` : "",
-      ].filter(Boolean).join(" · ");
+        counts.bat ? `${counts.bat} bat` : "",
+      ].filter(Boolean).join(" · ") + escalationSuffix;
     const banner = this.add
       .text(GAME_WIDTH / 2, 34, summary, {
         fontFamily: "system-ui, sans-serif",
@@ -1176,7 +1293,7 @@ export class TowerDefenseScene extends Phaser.Scene {
   }
 
   private tickWave(time: number, delta: number) {
-    const scaling = waveScaling(this.state.questionsAnswered);
+    const scaling = waveScaling(this.state.questionsAnswered, this.state.wrongAnswers);
 
     if (this.waveQueue.length > 0 && time >= this.nextSpawnAt) {
       const type = this.waveQueue.shift()!;
@@ -1187,8 +1304,8 @@ export class TowerDefenseScene extends Phaser.Scene {
     const dtSec = delta / 1000;
     for (const c of this.creeps) {
       if (!c.alive) continue;
-      // Lunge logic for stalker
       const def = CREEP_DEFS[c.type];
+      // Lunge logic (stalker)
       if (def.lunge) {
         if (time >= c.lungeEndsAt && c.currentSpeed !== c.baseSpeed) {
           c.currentSpeed = c.baseSpeed;
@@ -1197,12 +1314,25 @@ export class TowerDefenseScene extends Phaser.Scene {
           c.currentSpeed = c.baseSpeed * def.lunge.mult;
           c.lungeEndsAt = time + def.lunge.duration;
           c.nextLungeAt = time + def.lunge.every;
-          // brief flash
-          c.body.setFillStyle(0xfde68a, 1);
-          this.time.delayedCall(120, () => {
-            if (c.alive) c.body.setFillStyle(def.color, 0.95);
+          // brief yellow tint
+          c.body.setTint(0xfde68a);
+          this.time.delayedCall(140, () => {
+            if (c.alive) c.body.clearTint();
           });
         }
+      }
+      // Heal pulse (bat)
+      if (def.heal && time >= c.nextHealAt) {
+        const heal = def.heal;
+        for (const other of this.creeps) {
+          if (!other.alive || other.hp >= other.maxHp) continue;
+          const d = Math.hypot(other.sprite.x - c.sprite.x, other.sprite.y - c.sprite.y);
+          if (d <= heal.radius) {
+            other.hp = Math.min(other.maxHp, other.hp + heal.amount);
+          }
+        }
+        this.healPulse(c.sprite.x, c.sprite.y, heal.radius);
+        c.nextHealAt = time + heal.every;
       }
       c.progress += c.currentSpeed * dtSec;
       if (c.progress >= 1) {
@@ -1250,14 +1380,13 @@ export class TowerDefenseScene extends Phaser.Scene {
   private spawnCreep(type: CreepType, scaling: { hpMult: number; speedMult: number }) {
     const def = CREEP_DEFS[type];
     const c = this.add.container(PATH_POINTS[0][0], PATH_POINTS[0][1]);
-    const body = this.add
-      .circle(0, 0, def.radius, def.color, 0.95)
-      .setStrokeStyle(2, 0xffffff, 0.6);
-    const inner = this.add.circle(0, 0, Math.max(2, def.radius - 4), def.innerColor, 0.9);
+    const body = this.add.sprite(0, 0, `td_${def.spriteKey}`, 0).setScale(def.scale);
+    body.play(`td_${def.spriteKey}_walk`);
     const barW = def.radius * 2 + 4;
-    const hpBarBg = this.add.rectangle(0, -def.radius - 8, barW, 3, 0x1e293b, 1).setOrigin(0.5);
-    const hpBar = this.add.rectangle(-barW / 2, -def.radius - 8, barW, 3, 0x4ade80, 1).setOrigin(0, 0.5);
-    c.add([body, inner, hpBarBg, hpBar]);
+    const barY = -def.radius - 8;
+    const hpBarBg = this.add.rectangle(0, barY, barW, 3, 0x1e293b, 1).setOrigin(0.5);
+    const hpBar = this.add.rectangle(-barW / 2, barY, barW, 3, 0x4ade80, 1).setOrigin(0, 0.5);
+    c.add([body, hpBarBg, hpBar]);
     this.layerWorld.add(c);
 
     const hp = Math.round(def.baseHp * scaling.hpMult);
@@ -1276,6 +1405,7 @@ export class TowerDefenseScene extends Phaser.Scene {
       currentSpeed: speed,
       nextLungeAt: this.time.now + (def.lunge ? def.lunge.every : 0),
       lungeEndsAt: 0,
+      nextHealAt: this.time.now + (def.heal ? def.heal.every : 0),
       alive: true,
     });
   }
@@ -1328,10 +1458,10 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private damageCreep(c: Creep, dmg: number) {
     c.hp -= dmg;
-    const def = CREEP_DEFS[c.type];
-    c.body.setFillStyle(0xffffff, 1);
-    this.time.delayedCall(60, () => {
-      if (c.alive) c.body.setFillStyle(def.color, 0.95);
+    // White flash via tintFill so the sprite reads as "hit" regardless of base color.
+    c.body.setTintFill(0xffffff);
+    this.time.delayedCall(70, () => {
+      if (c.alive) c.body.clearTint();
     });
     if (c.hp <= 0) {
       c.alive = false;
@@ -1374,6 +1504,36 @@ export class TowerDefenseScene extends Phaser.Scene {
       alpha: 0,
       duration: 180,
       onComplete: () => proj.destroy(),
+    });
+  }
+
+  private healPulse(x: number, y: number, radius: number) {
+    // Expanding green ring + a brief plus glyph on the heal source.
+    const ring = this.add.circle(x, y, 6, 0x86efac, 0).setStrokeStyle(2, 0x86efac, 0.9);
+    this.layerEffects.add(ring);
+    this.tweens.add({
+      targets: ring,
+      radius,
+      alpha: 0,
+      duration: 540,
+      ease: "Quad.easeOut",
+      onComplete: () => ring.destroy(),
+    });
+    const glyph = this.add
+      .text(x, y - 18, "+", {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "16px",
+        color: "#86efac",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5);
+    this.layerEffects.add(glyph);
+    this.tweens.add({
+      targets: glyph,
+      y: y - 34,
+      alpha: 0,
+      duration: 480,
+      onComplete: () => glyph.destroy(),
     });
   }
 
@@ -1442,6 +1602,22 @@ export class TowerDefenseScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    const escalationLine = !result.correct
+      ? `⚠ Permanent: every future wave now spawns +${WRONG_EXTRA_ENEMIES_PER} more enemies (total +${this.state.wrongAnswers * WRONG_EXTRA_ENEMIES_PER} from ${this.state.wrongAnswers} wrong).`
+      : null;
+    const escalationText = escalationLine
+      ? this.add
+          .text(0, 0, escalationLine, {
+            fontFamily: "system-ui, sans-serif",
+            fontSize: "13px",
+            color: "#fbbf24",
+            align: "center",
+            wordWrap: { width: 620 },
+            lineSpacing: 3,
+          })
+          .setOrigin(0.5)
+      : null;
+
     const explanation = this.add
       .text(0, 0, result.explanation || "—", {
         fontFamily: "system-ui, sans-serif",
@@ -1477,6 +1653,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     const padTop = 22;
     const padBottom = 18;
     const gapTitleAns = 16;
+    const gapAnsEsc = 12;
     const gapAnsExp = 16;
     const gapExpStats = 22;
     const gapStatsBtn = 18;
@@ -1486,11 +1663,15 @@ export class TowerDefenseScene extends Phaser.Scene {
     const minPanelH = 260;
     const maxPanelH = GAME_HEIGHT - 60;
 
+    const escalationBlockH = escalationText
+      ? gapAnsEsc + escalationText.height
+      : 0;
     const contentH =
       padTop +
       titleText.height +
       gapTitleAns +
       ansText.height +
+      escalationBlockH +
       gapAnsExp +
       explanation.height +
       gapExpStats +
@@ -1510,7 +1691,13 @@ export class TowerDefenseScene extends Phaser.Scene {
     titleText.setY(y + titleText.height / 2);
     y += titleText.height + gapTitleAns;
     ansText.setY(y + ansText.height / 2);
-    y += ansText.height + gapAnsExp;
+    y += ansText.height;
+    if (escalationText) {
+      y += gapAnsEsc;
+      escalationText.setY(y + escalationText.height / 2);
+      y += escalationText.height;
+    }
+    y += gapAnsExp;
     explanation.setY(y + explanation.height / 2);
     y += explanation.height + gapExpStats;
     stats.setY(y + stats.height / 2);
@@ -1536,7 +1723,10 @@ export class TowerDefenseScene extends Phaser.Scene {
     btnHit.on("pointerout", () => btnBg.setFillStyle(0x3b3fff));
     btnHit.on("pointerdown", () => this.onComplete());
 
-    panel.add([bg, titleText, ansText, explanation, stats, btnBg, btnText, btnHit, hint]);
+    const panelChildren: Phaser.GameObjects.GameObject[] = [bg, titleText, ansText];
+    if (escalationText) panelChildren.push(escalationText);
+    panelChildren.push(explanation, stats, btnBg, btnText, btnHit, hint);
+    panel.add(panelChildren);
     this.layerUi.add(panel);
     this.panel = panel;
 

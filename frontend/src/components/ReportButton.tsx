@@ -71,7 +71,7 @@ export function ReportButton() {
         type="button"
         onClick={openModal}
         title="Report a problem with this question"
-        className="fixed bottom-4 right-4 z-40 flex items-center gap-1.5 rounded-full border border-slate-600 bg-space-800/85 px-3 py-1.5 text-xs font-medium text-slate-300 shadow-lg backdrop-blur transition hover:border-rose-400 hover:text-rose-200"
+        className="fixed bottom-4 right-4 z-40 flex items-center gap-2.5 rounded-full border border-slate-600 bg-space-800/85 px-6 py-3 text-base font-medium text-slate-300 shadow-lg backdrop-blur transition hover:border-rose-400 hover:text-rose-200"
       >
         <span aria-hidden>⚑</span>
         Report question

@@ -18,11 +18,12 @@ const OVERVIEWS: Record<string, OverviewContent> = {
     rules: [
       "Read the question, then click the answer card you think is right.",
       "Correct answer → you earn a tower or upgrade and gain economy.",
-      "Wrong answer → you get a weak placement and the wave gains ground.",
+      "Wrong answer → you get a weak placement AND every future wave permanently spawns more enemies, faster.",
       "Towers auto-fire at incoming exploits between questions.",
       "If an exploit reaches the core, you lose HP. Lose all HP and the run ends.",
     ],
     tips: [
+      "Wrong answers escalate the rest of the run — each one adds +2 enemies to every wave forever and speeds up the spill rate.",
       "Streaks boost your score multiplier — don't break the chain.",
       "Tower placement persists across all 30 questions.",
     ],
