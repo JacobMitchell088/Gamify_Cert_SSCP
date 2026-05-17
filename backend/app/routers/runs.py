@@ -3,6 +3,7 @@ import time
 from fastapi import APIRouter, HTTPException
 from sqlmodel import select
 
+from ..config import get_settings
 from ..db import get_session
 from ..models import AnswerIn, AnswerOut, BatchOut, Run, RunQuestion
 from ..services.games import BATCH_SIZE, TOTAL_BATCHES, game_for_batch
@@ -29,11 +30,12 @@ def _build_batch(session, run: Run, batch_index: int) -> BatchOut:
     session.add(run)
     session.commit()
 
+    reveal = get_settings().dev_reveal_answers
     return BatchOut(
         run_id=run.id,
         batch_index=batch_index,
         game_key=game_for_batch(batch_index),
-        questions=[q.to_out() for q in questions],
+        questions=[q.to_out(reveal_correct=reveal) for q in questions],
         is_final=batch_index + 1 >= TOTAL_BATCHES,
     )
 

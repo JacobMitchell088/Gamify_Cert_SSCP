@@ -316,3 +316,32 @@ Hero HP bar on the left (x=20, w=480), boss HP bar on the right (x=`GAME_WIDTH�
 ### 10.9 Frontend asset paths
 - Sprite/background PNGs: `frontend/public/sprites/` → served at `/sprites/...` by Vite. Both dev (`npm run dev`) and build (`npm run build` → `frontend/dist/sprites/`) pick them up automatically.
 - Frame dims and animation frame counts are duplicated in `RpgBossScene.preload()` and `RpgBossScene.ensureAnimations()` — they must stay in sync with the actual PNG dimensions.
+
+### 10.10 Vault Lockdown shared-graph mechanic (`VaultLockdownScene.ts`)
+Replaces the original "6 straight radial paths" design. Each run rolls a fresh random graph that all attackers share:
+
+- **Graph generation** (`generateGraph()` at the bottom of the scene file): vault at center, 6 spawn nodes on the outer ring (angles jittered ±11° off the cardinal sextants), 4–5 random mid-ring nodes, 2–3 inner-ring nodes, and ring 0→1→2→vault edges with occasional same-ring lateral edges. Some spawns also get a 25% shortcut edge directly to an inner node, so a few attackers start inherently closer to the vault. There's a final connectivity sweep that wires any isolated spawn directly to its nearest inner node.
+- **Attacker movement** (`nextStepFor()` + `shortestPath()`): every step recomputes a BFS shortest path from the attacker's current node to the vault, treating **edges with ≥1 lock as impassable**. If every route is locked, it falls back to the absolute shortest path and burns a lock on the next edge it crosses (the "lock-busting" branch in `resolveAdvance()`). This keeps the game finite — the player can stall an attacker but can't freeze it forever.
+- **Locks live on edges, not paths.** `state.edgeLocks` is `Record<edgeKey, count>` where `edgeKey = "min(a,b)-max(a,b)"`. `MAX_LOCKS_PER_EDGE = 2`. Click an edge during the `placing` phase to drop a lock there.
+- **Attackers always sit on nodes.** No mid-edge tweening for resting state — they animate between nodes during a step and snap to the destination on tween complete. Multiple attackers on the same node fan out radially (`attackerSlotOffset()`) so they don't z-fight.
+- **Pre-question telegraph.** `state.nextMovers` is pre-computed (`planNextMovers()`) and persisted, so the same two attackers shown pulsing during the answer phase are exactly the ones that resolve in `startAttack()`. `nextMovers[0]` moves on correct OR wrong; `nextMovers[1]` only on wrong. The HUD telegraph line + a banner under the stem spell this out for the player. Movers are re-planned in `advanceQuestion()` after each resolution.
+- **Persistence + new-run reset.** `REGISTRY_KEY = "vault_state_v2"` (v1 was the old straight-path version — different key avoids cross-version state pollution). The Phaser.Game is destroyed when `GameHost` unmounts (i.e. on menu→play transitions), which wipes the registry. So every fresh "Play" automatically generates a new graph; mid-run batches reuse the same graph.
+
+If you change `MAX_LOCKS_PER_EDGE`, also update the placing-phase hint text — it quotes the constant literally.
+
+---
+
+## 11. Dev toggle: reveal correct answer
+
+A single backend flag exposes each question's `correct_index` to the frontend so every option card can render a small "✓ DEV" badge over the right answer for debugging and testing.
+
+**Toggle location:** `backend/app/config.py` → `dev_reveal_answers: bool` (currently `True`). Flip to `False` and restart the backend before any public deploy.
+
+**Plumbing:**
+- `backend/app/config.py` — the flag.
+- `backend/app/models.py` — `QuestionOut.correct_index: int | None`; `Question.to_out(reveal_correct=...)` gates inclusion.
+- `backend/app/routers/runs.py` — `_build_batch` reads the flag from settings and passes it through.
+- `frontend/src/types.ts` — `Question.correct_index?: number` (optional; absent when flag is off).
+- `frontend/src/games/sceneContract.ts` — `makeDevAnswerBadge(scene, question, optionIndex, w, h)` returns a small green badge container when `question.correct_index === optionIndex`, else null. Every scene that renders option cards (`TowerDefenseScene`, `RpgBossScene`, `VaultLockdownScene`, `AsteroidAnswerScene`, `PatchTuesdayScene`) calls this helper at card-build time.
+
+**To remove permanently later:** set the flag to `False` (one line), confirm the frontend `Question.correct_index` field stops being populated, and optionally strip the helper + call sites. The field is optional, so leaving the plumbing in place is harmless.

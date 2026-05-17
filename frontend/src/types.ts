@@ -12,6 +12,13 @@ export interface Question {
   stem: string;
   options: [string, string, string, string];
   domain: Domain;
+  /**
+   * Dev-only field. Populated by the backend when
+   * `settings.dev_reveal_answers=True` so scenes can render a "✓ DEV" badge
+   * over the right option for testing. Always undefined in production builds.
+   * See CLAUDE.md §11.
+   */
+  correct_index?: number;
 }
 
 export interface Batch {

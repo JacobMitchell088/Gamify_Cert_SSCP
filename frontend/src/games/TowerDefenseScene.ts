@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 
 import type { AnswerResult, Question } from "../types";
-import { GAME_HEIGHT, GAME_WIDTH, type SceneData } from "./sceneContract";
+import { GAME_HEIGHT, GAME_WIDTH, makeDevAnswerBadge, type SceneData } from "./sceneContract";
 
 // ----------------------- Path & map -----------------------
 
@@ -722,6 +722,8 @@ export class TowerDefenseScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     c.add([bg, stripe, letter, body]);
+    const devBadge = makeDevAnswerBadge(this, this.question, idx, w, h);
+    if (devBadge) c.add(devBadge);
 
     // Use a Zone on top as the click target — guaranteed reliable hit area.
     const hit = this.add.zone(0, 0, w, h).setOrigin(0.5);

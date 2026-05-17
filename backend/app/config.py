@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     database_url: str = "sqlite:///./app/data/pool.db"
 
+    # Dev-only: when True, /run/start and /run/{id}/next-batch include each
+    # question's correct_index in its payload so the frontend can render a
+    # debug badge on the right answer. Flip to False before any public deploy.
+    # See CLAUDE.md §11 for details.
+    dev_reveal_answers: bool = True
+
     @property
     def free_model_list(self) -> list[str]:
         return [m.strip() for m in self.openrouter_free_models.split(",") if m.strip()]
