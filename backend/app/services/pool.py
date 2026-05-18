@@ -13,9 +13,14 @@ SEED_PATH = Path(__file__).resolve().parent.parent / "data" / "seed_questions.js
 
 
 def load_seed_if_empty(session: Session) -> int:
-    """Load seed_questions.json into the DB if the pool is empty. Returns rows inserted."""
+    """Load seed_questions.json into the DB if the pool is empty. Returns rows inserted.
+
+    Idempotent: on every boot we COUNT the question table; if it already has
+    rows we log and return 0 without touching anything. Safe to call repeatedly.
+    """
     existing = session.exec(select(func.count()).select_from(Question)).one()
     if existing:
+        logger.info("seed skip: pool already has %d questions", existing)
         return 0
 
     if not SEED_PATH.exists():
@@ -23,6 +28,7 @@ def load_seed_if_empty(session: Session) -> int:
         return 0
 
     raw = json.loads(SEED_PATH.read_text())
+    logger.info("seeding empty pool from %s (%d candidates)", SEED_PATH.name, len(raw))
     inserted = 0
     for entry in raw:
         try:

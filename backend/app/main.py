@@ -19,8 +19,14 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     settings = get_settings()
     init_db()
-    with get_session() as session:
-        load_seed_if_empty(session)
+    # Seed errors are non-fatal: the app should still boot so /health works
+    # and the operator can diagnose. The pool may end up empty until the next
+    # successful boot, but that's better than a crash loop.
+    try:
+        with get_session() as session:
+            load_seed_if_empty(session)
+    except Exception:  # noqa: BLE001
+        logger.exception("[seed] load_seed_if_empty failed (continuing)")
 
     scheduler: AsyncIOScheduler | None = None
     if settings.openrouter_api_key and settings.free_model_list:
