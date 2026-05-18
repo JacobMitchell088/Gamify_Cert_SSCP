@@ -87,8 +87,7 @@ export function Menu() {
           SSCP Gauntlet
         </h1>
         <p className="mx-auto mt-2 max-w-2xl text-slate-300">
-          Pick a game. SSCP practice questions drive every mechanic — answer right to
-          win, answer wrong to bleed. Stay sharp.
+          Pick a game. SSCP practice questions drive every mechanic - Learn while you play
         </p>
       </div>
 

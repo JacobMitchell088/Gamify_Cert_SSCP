@@ -1,8 +1,16 @@
 import { create } from "zustand";
 
-import { api } from "../api/client";
-
 export type BackendStatus = "unknown" | "warming" | "ready";
+
+// Direct fetch (not via api/client) to avoid a circular import:
+//   api/client.ts → useBackendStatus → api/client.ts
+// With the cycle, the `api` reference inside this module could be momentarily
+// undefined under some bundler outputs, the empty catch would swallow the
+// TypeError, and no /health request would ever leave the browser.
+const HEALTH_URL = (() => {
+  const base = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+  return `${base.replace(/\/$/, "")}/health`;
+})();
 
 interface BackendStatusState {
   status: BackendStatus;
@@ -22,10 +30,13 @@ async function pingOnce(set: (partial: Partial<BackendStatusState>) => void) {
   if (pollInFlight) return;
   pollInFlight = true;
   try {
-    await api.health();
-    set({ status: "ready", warmStartedAt: null });
+    // Plain GET, no Content-Type header → no CORS preflight needed.
+    const r = await fetch(HEALTH_URL, { method: "GET", cache: "no-store" });
+    if (r.ok) {
+      set({ status: "ready", warmStartedAt: null });
+    }
   } catch {
-    // Stay in warming state; the next tick will retry.
+    // Network failure (cold backend, offline, etc.) — stay warming; next tick retries.
   } finally {
     pollInFlight = false;
   }
