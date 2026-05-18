@@ -19,3 +19,4 @@ coverage/
 *.sqlite3
 .venv/
 backend/app/data/pool.db
+.bak.*
