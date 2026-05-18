@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 
 import type { AnswerResult, Question } from "../types";
-import { GAME_HEIGHT, GAME_WIDTH, type SceneData } from "./sceneContract";
+import { GAME_HEIGHT, GAME_WIDTH, makeDevAnswerBadge, type SceneData } from "./sceneContract";
 
 const LANE_COUNT = 4;
 const LANE_WIDTH = GAME_WIDTH / LANE_COUNT;
@@ -90,6 +90,8 @@ export class AsteroidAnswerScene extends Phaser.Scene {
         })
         .setOrigin(0.5);
       portal.add([ring, label]);
+      const devBadge = makeDevAnswerBadge(this, this.question, i, LANE_WIDTH - 30, 60);
+      if (devBadge) portal.add(devBadge);
       this.portals.push(portal);
     }
 

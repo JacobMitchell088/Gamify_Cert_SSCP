@@ -37,12 +37,18 @@ class QuestionIn(BaseModel):
 
 
 class QuestionOut(BaseModel):
-    """What the frontend sees — no correct_index."""
+    """What the frontend sees — no correct_index by default.
+
+    The optional `correct_index` field is populated only when
+    `settings.dev_reveal_answers` is True; the routers gate this so a
+    production build never leaks it. See CLAUDE.md §11.
+    """
 
     id: int
     stem: str
     options: list[str]
     domain: Domain
+    correct_index: int | None = None
 
 
 class Question(SQLModel, table=True):
@@ -61,12 +67,13 @@ class Question(SQLModel, table=True):
     source: str = "seed"
     used_count: int = SQLField(default=0, index=True)
 
-    def to_out(self) -> QuestionOut:
+    def to_out(self, reveal_correct: bool = False) -> QuestionOut:
         return QuestionOut(
             id=self.id or 0,
             stem=self.stem,
             options=[self.option_a, self.option_b, self.option_c, self.option_d],
             domain=Domain(self.domain),
+            correct_index=self.correct_index if reveal_correct else None,
         )
 
 
@@ -137,3 +144,12 @@ class ReportIn(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
     had_answered: bool = False
     player_pick: int | None = Field(default=None, ge=0, le=3)
+
+
+class FeedbackIn(BaseModel):
+    """General player feedback — routed to a GitHub Issue."""
+
+    message: str = Field(min_length=1, max_length=4000)
+    category: str = Field(default="general", max_length=40)
+    contact: str | None = Field(default=None, max_length=200)
+    page: str | None = Field(default=None, max_length=200)

@@ -1,5 +1,8 @@
 import { useEffect } from "react";
 
+import { ExitButton } from "./components/ExitButton";
+import { FeedbackButton } from "./components/FeedbackButton";
+import { GameOverview } from "./components/GameOverview";
 import { HUD } from "./components/HUD";
 import { Menu } from "./components/Menu";
 import { ReportButton } from "./components/ReportButton";
@@ -21,6 +24,7 @@ export default function App() {
   }, []);
 
   if (phase === "menu") return <Menu />;
+  if (phase === "overview") return <GameOverview />;
   if (phase === "loading") return <LoadingScreen />;
   if (phase === "error") {
     return (
@@ -46,7 +50,9 @@ export default function App() {
     <div className="flex h-full flex-col">
       <HUD />
       <GameHost />
+      <FeedbackButton />
       <ReportButton />
+      <ExitButton />
     </div>
   );
 }

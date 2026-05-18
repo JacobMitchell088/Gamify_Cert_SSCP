@@ -3,9 +3,10 @@ import time
 from fastapi import APIRouter, HTTPException
 from sqlmodel import select
 
+from ..config import get_settings
 from ..db import get_session
 from ..models import AnswerIn, AnswerOut, BatchOut, Run, RunQuestion
-from ..services.games import BATCH_SIZE, TOTAL_BATCHES, game_for_batch
+from ..services.games import BATCH_SIZE, game_for_batch
 from ..services.pool import get_question, reserve_batch
 
 router = APIRouter(prefix="/run")
@@ -29,12 +30,16 @@ def _build_batch(session, run: Run, batch_index: int) -> BatchOut:
     session.add(run)
     session.commit()
 
+    reveal = get_settings().dev_reveal_answers
     return BatchOut(
         run_id=run.id,
         batch_index=batch_index,
         game_key=game_for_batch(batch_index),
-        questions=[q.to_out() for q in questions],
-        is_final=batch_index + 1 >= TOTAL_BATCHES,
+        questions=[q.to_out(reveal_correct=reveal) for q in questions],
+        # Runs are open-ended: each game's scene decides when to end (e.g.
+        # tower-defense core dies, RPG hero or boss falls). The backend keeps
+        # serving batches as long as the pool can fill them.
+        is_final=False,
     )
 
 
@@ -61,9 +66,6 @@ def next_batch(run_id: int) -> BatchOut:
             select(RunQuestion).where(RunQuestion.run_id == run_id)
         ).all()
         batch_index = len(served) // BATCH_SIZE
-        if batch_index >= TOTAL_BATCHES:
-            raise HTTPException(status_code=400, detail="run complete")
-
         return _build_batch(session, run, batch_index)
 
 

@@ -35,4 +35,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  submitFeedback: (payload: {
+    message: string;
+    category: string;
+    contact: string | null;
+    page: string | null;
+  }) =>
+    jsonFetch<{ ok: boolean; issue_number: number | null; issue_url: string | null }>(
+      `/feedback`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    ),
 };

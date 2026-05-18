@@ -10,8 +10,10 @@ Status legend: ✅ shipped · 🚧 in progress · 💡 idea
 
 | # | Name | Status | Notes |
 |---|------|--------|-------|
-| 9 | Tower Defense: Exploit Wave | 🚧 / ✅ | Main game in v1 rotation. |
-| — | Asteroid Answer Run | 💡 retired from rotation | Built first; kept as a fallback / variety option. |
+| 9 | Tower Defense: Exploit Wave | ✅ | Player-selectable from the menu. |
+| 10 | Hacker Boss Duel | ✅ | Player-selectable from the menu. |
+| 17 | Vault Lockdown | ✅ | Player-selectable from the menu. |
+| — | Asteroid Answer Run | 💡 hidden | Earlier prototype; still in the codebase, removed from the menu. |
 
 ---
 
@@ -78,6 +80,31 @@ Status legend: ✅ shipped · 🚧 in progress · 💡 idea
 **Mechanic.** RPG combat. HP bars for player and boss. Each question is your attack roll — correct = damage, streak combos = crits, wrong = boss counter-attacks. Four themed bosses (Ransomware Wraith, Cipher Lich, Insider Spectre, Packet Hydra), one per domain group.
 **Question payload.** Plain MCQ wrapped in narrative flavor.
 **Why it works.** High theatrical impact, cheapest to build (mostly UI over the existing question flow).
+
+### 13. Network Conquest 💡
+**Mechanic.** Risk-style map of ~10 zones (DMZ, Corp LAN, Cloud, OT, Endpoint, etc.). Each turn the attacker AI threatens one zone; the 4 answer options are 4 defensive postures (segment / patch / monitor / harden). Correct answer holds the zone; wrong answer the zone flips red. Win = own majority at run end.
+**Question payload.** Standard MCQ; the zone under attack flavors the stem.
+**Why it works.** Persistent map state across all 30 questions makes early mistakes visible later — promotes strategic recovery, not just per-question reflex.
+
+### 14. Budget Bunker 💡
+**Mechanic.** Start each batch with a fixed security budget (e.g. 10 points). The 4 answer options are 4 spending choices of varying cost (1–4 pts each). Correct answer = the spend succeeds and adds a permanent control card to your bunker; wrong answer = the spend is wasted. At end of run, an incident-storm phase rolls each control vs. random threats — your final score is what survives.
+**Question payload.** Standard MCQ; option text framed as a control purchase.
+**Why it works.** Forces real CISO-style trade-offs (broad cheap vs. narrow expensive) and ties question accuracy to a tangible end-game payoff.
+
+### 15. Patch Tuesday Deckbuilder 💡
+**Mechanic.** Lightweight deckbuilder. Player starts with a 5-card hand of generic controls. Each question is a CVE drop — correct answer lets you *draft* one of the 4 options into your deck; wrong answer adds a "tech debt" card that clogs future hands. Between batches, your deck auto-plays against a scripted exploit wave; survivors carry over.
+**Question payload.** Standard MCQ; option text doubles as the card name.
+**Why it works.** Long-arc progression — players feel their early decisions compound. Deck-building is inherently replayable, good for repeat runs.
+
+### 16. Red Team Heist (asymmetric) 💡
+**Mechanic.** Flip the perspective: player is the attacker climbing a 7-step kill chain (Recon → Weaponization → Delivery → Exploit → Install → C2 → Exfil). Each question's 4 options are 4 candidate techniques; correct = advance one step, wrong = the blue team logs you and adds a detection rule that costs +1 correct answer to bypass next step. Goal: exfil before the run ends.
+**Question payload.** Standard MCQ; stems re-themed from the attacker's viewpoint.
+**Why it works.** Teaches the kill chain from the inside out, a perspective rarely drilled in flashcards. Asymmetric framing breaks up the "I'm the defender" monotony of every other game.
+
+### 17. Vault Lockdown 💡
+**Mechanic.** A central crown-jewel asset surrounded by 6 radial attack paths. Each path has 3 distance rings. Every question, the attacker advances one ring on a random path; a correct answer lets you place a single lock anywhere on the board (locks freeze that path's advance). Wrong = no lock placed and the attacker advances an extra ring. Vault falls if any path reaches the center.
+**Question payload.** Standard MCQ; flavor text names the threat moving on the highlighted path.
+**Why it works.** Forces spatial prioritization — do you reinforce the closest path or the most-attacked one? Visible board state makes the consequence of each wrong answer feel earned.
 
 ---
 

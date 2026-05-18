@@ -3,7 +3,14 @@ import { create } from "zustand";
 import { api } from "../api/client";
 import type { AnswerResult, Batch, Domain, Question } from "../types";
 
-export type Phase = "menu" | "loading" | "playing" | "summary" | "review" | "error";
+export type Phase =
+  | "menu"
+  | "overview"
+  | "loading"
+  | "playing"
+  | "summary"
+  | "review"
+  | "error";
 
 export interface MissedQuestion {
   id: number;
@@ -38,19 +45,18 @@ interface RunState {
   recordAnswer: (chosenIndex: number) => Promise<AnswerResult>;
   advance: () => Promise<void>;
   abortRun: () => void;
+  quitToMenu: () => void;
   startReview: () => void;
   exitReview: () => void;
   reset: () => void;
 }
 
 function loadBatchIntoState(
-  s: Partial<RunState>,
   b: Batch,
   forcedGameKey?: string,
 ): Partial<RunState> {
   const [head, ...rest] = b.questions;
   return {
-    ...s,
     runId: b.run_id,
     gameKey: forcedGameKey ?? b.game_key,
     batchIndex: b.batch_index,
@@ -82,16 +88,15 @@ export const useRunStore = create<RunState>((set, get) => ({
     try {
       const batch = await api.startRun();
       const choice = get().selectedGameKey;
-      set((s) => ({
-        ...s,
+      set({
         score: 0,
         streak: 0,
         bestStreak: 0,
         totalAnswered: 0,
         totalCorrect: 0,
         missed: [],
-        ...loadBatchIntoState(s, batch, choice),
-      }));
+        ...loadBatchIntoState(batch, choice),
+      });
     } catch (e) {
       set({ phase: "error", errorMessage: (e as Error).message });
     }
@@ -161,7 +166,7 @@ export const useRunStore = create<RunState>((set, get) => ({
     try {
       const batch = await api.nextBatch(runId);
       const choice = get().selectedGameKey;
-      set((s) => ({ ...loadBatchIntoState(s, batch, choice) }));
+      set(loadBatchIntoState(batch, choice));
     } catch (e) {
       set({ phase: "error", errorMessage: (e as Error).message });
     }
@@ -174,6 +179,30 @@ export const useRunStore = create<RunState>((set, get) => ({
     }
     persistLocalProgress(score, bestStreak);
     set({ phase: "summary" });
+  },
+
+  quitToMenu: () => {
+    const { runId } = get();
+    if (runId) {
+      api.finishRun(runId).catch(() => {});
+    }
+    set({
+      phase: "menu",
+      errorMessage: undefined,
+      runId: undefined,
+      gameKey: undefined,
+      batchIndex: 0,
+      isFinalBatch: false,
+      queue: [],
+      currentQuestion: undefined,
+      currentChoice: undefined,
+      score: 0,
+      streak: 0,
+      bestStreak: 0,
+      totalAnswered: 0,
+      totalCorrect: 0,
+      missed: [],
+    });
   },
 
   startReview: () => set({ phase: "review" }),
