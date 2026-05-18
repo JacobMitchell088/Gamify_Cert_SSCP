@@ -858,16 +858,6 @@ export class TowerDefenseScene extends Phaser.Scene {
       hit?.disableInteractive();
       if (i === pickedIdx) {
         card.bg.setFillStyle(0x1f2a55, 1);
-        const checking = this.add
-          .text(0, 0, "Checking…", {
-            fontFamily: "system-ui, sans-serif",
-            fontSize: "12px",
-            color: "#cbd5f5",
-            fontStyle: "italic",
-          })
-          .setOrigin(0.5);
-        checking.setY(card.bg.height / 2 - 14);
-        card.container.add(checking);
       } else {
         card.container.setAlpha(0.35);
       }

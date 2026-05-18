@@ -1008,22 +1008,12 @@ export class RpgBossScene extends Phaser.Scene {
   /** Visually lock all answer cards the moment one is clicked. */
   private markAnswerPending(pickedIdx: number) {
     this.optionCards.forEach((card, i) => {
-      const hit = (card.container.list.find(
+      const hit = card.container.list.find(
         (o) => o instanceof Phaser.GameObjects.Zone,
-      ) as Phaser.GameObjects.Zone | undefined);
+      ) as Phaser.GameObjects.Zone | undefined;
       hit?.disableInteractive();
       if (i === pickedIdx) {
         card.bg.setFillStyle(0x1f2a55, 1);
-        const checking = this.add
-          .text(0, 0, "Checking…", {
-            fontFamily: "system-ui, sans-serif",
-            fontSize: "11px",
-            color: "#cbd5f5",
-            fontStyle: "italic",
-          })
-          .setOrigin(0.5);
-        checking.setY(card.bg.height / 2 - 12);
-        card.container.add(checking);
       } else {
         card.container.setAlpha(0.35);
       }

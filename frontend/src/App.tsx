@@ -63,6 +63,9 @@ function LoadingScreen() {
       <div className="flex flex-col items-center gap-3">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-space-accent border-t-transparent" />
         <div>Warming up the gauntlet…</div>
+        <div className="text-xs text-slate-500">
+          (free-tier backend cold start — usually ~60 seconds on first load)
+        </div>
       </div>
     </div>
   );
