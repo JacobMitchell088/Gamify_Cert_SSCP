@@ -144,3 +144,12 @@ class ReportIn(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
     had_answered: bool = False
     player_pick: int | None = Field(default=None, ge=0, le=3)
+
+
+class FeedbackIn(BaseModel):
+    """General player feedback — routed to a GitHub Issue."""
+
+    message: str = Field(min_length=1, max_length=4000)
+    category: str = Field(default="general", max_length=40)
+    contact: str | None = Field(default=None, max_length=200)
+    page: str | None = Field(default=None, max_length=200)

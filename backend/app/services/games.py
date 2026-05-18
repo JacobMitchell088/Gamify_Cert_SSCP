@@ -1,6 +1,5 @@
 GAME_ROTATION = ["tower_defense"]
 BATCH_SIZE = 10
-TOTAL_BATCHES = 3
 
 
 def game_for_batch(batch_index: int) -> str:
