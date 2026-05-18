@@ -7,6 +7,7 @@ interface GameOption {
   description: string;
   accent: string;
   available: boolean;
+  featured?: boolean;
 }
 
 const GAMES: GameOption[] = [
@@ -15,9 +16,10 @@ const GAMES: GameOption[] = [
     title: "Tower Defense",
     tagline: "Strategy · Build & defend",
     description:
-      "Place towers between waves. Each correct answer earns a tower or upgrade; wrong answers give a weak placement. Hold the core for 30 waves.",
+      "Place towers between waves. Each correct answer earns a tower or upgrade; wrong answers give a weak placement. Hold the core for as long as you can.",
     accent: "border-emerald-500 text-emerald-300",
     available: true,
+    featured: true,
   },
   {
     key: "rpg_boss",
@@ -35,7 +37,7 @@ const GAMES: GameOption[] = [
     description:
       "Six threat paths close in on a central vault. Correct answer = place a lock on the path of your choice; wrong = attackers gain an extra step. Locks soak one hit each. Don't let any path reach the vault.",
     accent: "border-cyan-500 text-cyan-300",
-    available: true,
+    available: false,
   },
   {
     key: "patch_tuesday",
@@ -44,7 +46,7 @@ const GAMES: GameOption[] = [
     description:
       "Build a deck of countermeasure cards (Firewall, IDS, AES-256, more). Each correct answer drafts a new card; wrong answers let the exploit slam your field. Cards auto-battle the incoming exploit each wave. Hold the infra for 30 waves.",
     accent: "border-violet-500 text-violet-300",
-    available: true,
+    available: false,
   },
   {
     key: "asteroid_answer",
@@ -138,9 +140,14 @@ function GameCard({ game, selected, onSelect, onPlay }: GameCardProps) {
             {game.tagline}
           </p>
         </div>
+        {game.featured && game.available && (
+          <span className="rounded-full border border-emerald-400 bg-emerald-500/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-200 shadow-sm shadow-emerald-500/30">
+            ★ Main Game
+          </span>
+        )}
         {!game.available && (
           <span className="rounded-full border border-slate-500 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-            In Development
+            Coming Soon
           </span>
         )}
       </div>

@@ -14,7 +14,7 @@ const OVERVIEWS: Record<string, OverviewContent> = {
     title: "Tower Defense: Exploit Wave",
     tagline: "Strategy · Build & defend",
     accent: "text-emerald-300 border-emerald-500",
-    goal: "Hold your core alive for 30 questions while waves of exploits march down the lane.",
+    goal: "Endless siege — hold your core alive for as long as you can. Waves never stop and only get nastier.",
     rules: [
       "Read the question, then click the answer card you think is right.",
       "Correct answer → you earn a tower or upgrade and gain economy.",
@@ -25,7 +25,7 @@ const OVERVIEWS: Record<string, OverviewContent> = {
     tips: [
       "Wrong answers escalate the rest of the run — each one adds +2 enemies to every wave forever and speeds up the spill rate.",
       "Streaks boost your score multiplier — don't break the chain.",
-      "Tower placement persists across all 30 questions.",
+      "Tower placement persists for the whole run, so early picks compound.",
     ],
   },
   rpg_boss: {

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 import { ExitButton } from "./components/ExitButton";
+import { FeedbackButton } from "./components/FeedbackButton";
 import { GameOverview } from "./components/GameOverview";
 import { HUD } from "./components/HUD";
 import { Menu } from "./components/Menu";
@@ -49,6 +50,7 @@ export default function App() {
     <div className="flex h-full flex-col">
       <HUD />
       <GameHost />
+      <FeedbackButton />
       <ReportButton />
       <ExitButton />
     </div>

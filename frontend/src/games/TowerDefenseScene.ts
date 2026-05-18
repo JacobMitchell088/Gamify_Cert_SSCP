@@ -167,14 +167,18 @@ const WRONG_SPAWN_INTERVAL_DELTA_MS = 12;
 // ----------------------- Wave config -----------------------
 
 function buildWaveQueue(qIndex: number, wrongCount: number): CreepType[] {
-  // Easier opening (Q0 starts at 3) but ramps up faster than the old curve.
-  const base = 3 + Math.floor(qIndex * 1.35);
+  // Runs are endless; the cap on enemies/wave was removed so late-game pressure
+  // keeps climbing until the player loses. Past Q20 the wave size grows
+  // super-linearly to make the overwhelm believable.
+  const linear = 3 + qIndex * 1.35;
+  const surge = qIndex > 20 ? Math.pow(qIndex - 20, 1.35) * 0.6 : 0;
+  const base = Math.floor(linear + surge);
   const wrongBonus = wrongCount * WRONG_EXTRA_ENEMIES_PER;
-  const total = Math.min(36, base + wrongBonus);
+  const total = base + wrongBonus;
   // Bats join the menagerie a bit earlier than brutes; they're support, not bruisers.
-  const pBat = qIndex < 4 ? 0 : Math.min(0.18, (qIndex - 3) * 0.028);
-  const pBrute = qIndex < 3 ? 0 : Math.min(0.32, (qIndex - 2) * 0.052);
-  const pStalker = qIndex < 5 ? 0 : Math.min(0.32, (qIndex - 4) * 0.052);
+  const pBat = qIndex < 4 ? 0 : Math.min(0.22, (qIndex - 3) * 0.028);
+  const pBrute = qIndex < 3 ? 0 : Math.min(0.36, (qIndex - 2) * 0.052);
+  const pStalker = qIndex < 5 ? 0 : Math.min(0.36, (qIndex - 4) * 0.052);
   const list: CreepType[] = [];
   for (let i = 0; i < total; i++) {
     const r = Math.random();
@@ -187,13 +191,15 @@ function buildWaveQueue(qIndex: number, wrongCount: number): CreepType[] {
 }
 
 function waveScaling(qIndex: number, wrongCount: number) {
-  // Spawn interval shrinks faster than before: Q0=700ms (same), Q10=480ms, Q20=260ms,
-  // floor at 200ms. Wrong answers shave further on top of that, forever.
+  // Endless run: HP/speed keep climbing forever and the spawn interval has a
+  // much lower floor than before so very late waves feel like a flood.
+  // Q0=700ms · Q10=480ms · Q20=260ms · Q30=140ms (floor) ish.
   const interval = 700 - qIndex * 22 - wrongCount * WRONG_SPAWN_INTERVAL_DELTA_MS;
+  const lateHpBoost = qIndex > 25 ? Math.pow(qIndex - 25, 1.25) * 0.05 : 0;
   return {
-    hpMult: 1 + qIndex * 0.105,
+    hpMult: 1 + qIndex * 0.105 + lateHpBoost,
     speedMult: 1 + qIndex * 0.016,
-    spawnInterval: Math.max(200, interval),
+    spawnInterval: Math.max(120, interval),
   };
 }
 
@@ -484,7 +490,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.hpBar.fillColor = pct > 0.5 ? 0x4ade80 : pct > 0.2 ? 0xfacc15 : 0xef4444;
     this.hpText.setText(`${hp} / 100`);
     this.statusText.setText(
-      `Q ${this.state.questionsAnswered + 1}/30   Towers: ${this.state.towers.length}`,
+      `Wave ${this.state.questionsAnswered + 1}   Towers: ${this.state.towers.length}`,
     );
   }
 
