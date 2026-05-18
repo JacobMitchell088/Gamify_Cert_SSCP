@@ -270,6 +270,12 @@ export class TowerDefenseScene extends Phaser.Scene {
 
   private panel: Phaser.GameObjects.Container | null = null;
 
+  // Click-debounce guards: prevent double-firing recordAnswer / onComplete
+  // while a slow backend round trip is in flight.
+  private answerLocked = false;
+  private continueLocked = false;
+  private optionCards: { bg: Phaser.GameObjects.Rectangle; container: Phaser.GameObjects.Container }[] = [];
+
   private placementType: TowerType = "aoe";
   private placementWeak = false;
   private placementPreview: Phaser.GameObjects.Container | null = null;
@@ -667,6 +673,8 @@ export class TowerDefenseScene extends Phaser.Scene {
   private startAnswering() {
     this.phase = "answering";
     this.clearPanel();
+    this.answerLocked = false;
+    this.optionCards = [];
 
     const panel = this.add.container(0, 0);
 
@@ -823,13 +831,47 @@ export class TowerDefenseScene extends Phaser.Scene {
     hit.setInteractive({ useHandCursor: true });
     c.add(hit);
 
-    hit.on("pointerover", () => bg.setFillStyle(0x172040, 1));
-    hit.on("pointerout", () => bg.setFillStyle(0x0e1430, 0.96));
+    hit.on("pointerover", () => {
+      if (this.answerLocked) return;
+      bg.setFillStyle(0x172040, 1);
+    });
+    hit.on("pointerout", () => {
+      if (this.answerLocked) return;
+      bg.setFillStyle(0x0e1430, 0.96);
+    });
     hit.on("pointerdown", () => {
-      hit.disableInteractive();
+      if (this.answerLocked) return;
+      this.answerLocked = true;
+      this.markAnswerPending(idx);
       void this.onOptionPicked(idx);
     });
+    this.optionCards.push({ bg, container: c });
     return c;
+  }
+
+  /** Visually lock all answer cards the moment one is clicked. */
+  private markAnswerPending(pickedIdx: number) {
+    this.optionCards.forEach((card, i) => {
+      const hit = card.container.list.find(
+        (o) => o instanceof Phaser.GameObjects.Zone,
+      ) as Phaser.GameObjects.Zone | undefined;
+      hit?.disableInteractive();
+      if (i === pickedIdx) {
+        card.bg.setFillStyle(0x1f2a55, 1);
+        const checking = this.add
+          .text(0, 0, "Checking…", {
+            fontFamily: "system-ui, sans-serif",
+            fontSize: "12px",
+            color: "#cbd5f5",
+            fontStyle: "italic",
+          })
+          .setOrigin(0.5);
+        checking.setY(card.bg.height / 2 - 14);
+        card.container.add(checking);
+      } else {
+        card.container.setAlpha(0.35);
+      }
+    });
   }
 
   private async onOptionPicked(idx: number) {
@@ -1570,6 +1612,7 @@ export class TowerDefenseScene extends Phaser.Scene {
   private startFeedback() {
     this.phase = "feedback";
     this.clearPanel();
+    this.continueLocked = false;
 
     const result = this.answerResult ?? { correct: false, correct_index: -1, explanation: "" };
     const hpLost = Math.max(0, this.waveStartCoreHp - this.state.coreHp);
@@ -1725,9 +1768,23 @@ export class TowerDefenseScene extends Phaser.Scene {
       .setOrigin(0.5);
     const btnHit = this.add.zone(0, btnY, 220, btnH).setOrigin(0.5);
     btnHit.setInteractive({ useHandCursor: true });
-    btnHit.on("pointerover", () => btnBg.setFillStyle(0x4f46e5));
-    btnHit.on("pointerout", () => btnBg.setFillStyle(0x3b3fff));
-    btnHit.on("pointerdown", () => this.onComplete());
+    btnHit.on("pointerover", () => {
+      if (this.continueLocked) return;
+      btnBg.setFillStyle(0x4f46e5);
+    });
+    btnHit.on("pointerout", () => {
+      if (this.continueLocked) return;
+      btnBg.setFillStyle(0x3b3fff);
+    });
+    const handleContinue = () => {
+      if (this.continueLocked) return;
+      this.continueLocked = true;
+      btnBg.setFillStyle(0x2c2f80, 1);
+      btnText.setText("Loading…");
+      btnHit.disableInteractive();
+      this.onComplete();
+    };
+    btnHit.on("pointerdown", handleContinue);
 
     const panelChildren: Phaser.GameObjects.GameObject[] = [bg, titleText, ansText];
     if (escalationText) panelChildren.push(escalationText);
@@ -1736,7 +1793,7 @@ export class TowerDefenseScene extends Phaser.Scene {
     this.layerUi.add(panel);
     this.panel = panel;
 
-    this.input.keyboard?.once("keydown-SPACE", () => this.onComplete());
+    this.input.keyboard?.once("keydown-SPACE", handleContinue);
   }
 
   // ----------------------- Phase: game over -----------------------

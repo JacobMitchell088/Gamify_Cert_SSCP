@@ -68,6 +68,12 @@ function loadBatchIntoState(
   };
 }
 
+// Module-level re-entrancy guards. These live outside the Zustand state so they
+// don't trigger re-renders; they only protect the network calls from being
+// double-fired by a fast clicker or by two scenes racing the same action.
+let answerInflight: Promise<AnswerResult> | null = null;
+let advanceInflight: Promise<void> | null = null;
+
 export const useRunStore = create<RunState>((set, get) => ({
   phase: "menu",
   batchIndex: 0,
@@ -103,12 +109,25 @@ export const useRunStore = create<RunState>((set, get) => ({
   },
 
   recordAnswer: async (chosenIndex: number) => {
+    // A previous click is still resolving — return that same promise instead of
+    // firing a second /answer for the (already-graded) question.
+    if (answerInflight) return answerInflight;
     const { runId, currentQuestion } = get();
     if (!runId || !currentQuestion) {
       return { correct: false, correct_index: -1, explanation: "" };
     }
-    const result = await api.submitAnswer(runId, currentQuestion.id, chosenIndex);
-    set({ currentChoice: chosenIndex });
+    const run = async (): Promise<AnswerResult> => {
+      const result = await api.submitAnswer(runId, currentQuestion.id, chosenIndex);
+      set({ currentChoice: chosenIndex });
+      return result;
+    };
+    answerInflight = run();
+    let result: AnswerResult;
+    try {
+      result = await answerInflight;
+    } finally {
+      answerInflight = null;
+    }
     set((s) => {
       const newStreak = result.correct ? s.streak + 1 : 0;
       const missed = result.correct
@@ -138,6 +157,10 @@ export const useRunStore = create<RunState>((set, get) => ({
   },
 
   advance: async () => {
+    // Coalesce double-clicks on Continue: if a fetch is already in flight, the
+    // second caller just waits on the same promise instead of skipping a
+    // question or fetching a redundant batch.
+    if (advanceInflight) return advanceInflight;
     const { queue, runId, isFinalBatch } = get();
     if (queue.length > 0) {
       set({
@@ -163,12 +186,20 @@ export const useRunStore = create<RunState>((set, get) => ({
     // (which is where TD/RPG persist their HP and progress). Keep GameHost
     // mounted; the scene stays on the feedback panel while the new batch
     // arrives, then re-inits with the next question.
+    const fetchAndLoad = async () => {
+      try {
+        const batch = await api.nextBatch(runId);
+        const choice = get().selectedGameKey;
+        set(loadBatchIntoState(batch, choice));
+      } catch (e) {
+        set({ phase: "error", errorMessage: (e as Error).message });
+      }
+    };
+    advanceInflight = fetchAndLoad();
     try {
-      const batch = await api.nextBatch(runId);
-      const choice = get().selectedGameKey;
-      set(loadBatchIntoState(batch, choice));
-    } catch (e) {
-      set({ phase: "error", errorMessage: (e as Error).message });
+      await advanceInflight;
+    } finally {
+      advanceInflight = null;
     }
   },
 
