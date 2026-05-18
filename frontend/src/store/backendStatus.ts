@@ -10,6 +10,9 @@ interface BackendStatusState {
   warmStartedAt: number | null;
   /** Begin polling /health. Safe to call repeatedly; only one loop runs at a time. */
   startWarmup: () => void;
+  /** Flip to ready immediately. Called from jsonFetch on any 2xx — a live call is
+   *  better proof of warmth than a delayed /health poll. */
+  markReady: () => void;
 }
 
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -48,10 +51,19 @@ export const useBackendStatus = create<BackendStatusState>((set, get) => ({
         }
         return;
       }
-      // Poll every 5s during warmup so we don't hammer the free-tier instance
-      // but still notice quickly when it comes online.
-      pollTimer = setTimeout(tick, 5000);
+      // Poll every 3s during warmup so the pill flips to ready quickly once the
+      // backend wakes up, without hammering the free-tier instance.
+      pollTimer = setTimeout(tick, 3000);
     };
     void tick();
+  },
+
+  markReady: () => {
+    if (get().status === "ready") return;
+    if (pollTimer !== null) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+    set({ status: "ready", warmStartedAt: null });
   },
 }));

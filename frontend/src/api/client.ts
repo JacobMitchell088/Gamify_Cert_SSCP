@@ -1,3 +1,4 @@
+import { useBackendStatus } from "../store/backendStatus";
 import type { AnswerResult, Batch } from "../types";
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
@@ -10,6 +11,9 @@ async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
   if (!r.ok) {
     throw new Error(`${r.status} ${r.statusText}`);
   }
+  // Any 2xx is proof the backend is live — flip the menu pill to ready
+  // immediately rather than waiting for the next /health poll tick.
+  useBackendStatus.getState().markReady();
   return (await r.json()) as T;
 }
 
