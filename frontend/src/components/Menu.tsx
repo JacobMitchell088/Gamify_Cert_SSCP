@@ -1,3 +1,4 @@
+import { useBackendStatus } from "../store/backendStatus";
 import { readLocalProgress, useRunStore } from "../store/runStore";
 
 interface GameOption {
@@ -71,6 +72,7 @@ const GAMES: GameOption[] = [
 export function Menu() {
   const setSelectedGame = useRunStore((s) => s.setSelectedGame);
   const selectedGameKey = useRunStore((s) => s.selectedGameKey);
+  const backendStatus = useBackendStatus((s) => s.status);
   const progress = readLocalProgress();
 
   const onPlay = (key: string) => {
@@ -89,6 +91,8 @@ export function Menu() {
           win, answer wrong to bleed. Stay sharp.
         </p>
       </div>
+
+      <BackendPill status={backendStatus} />
 
       <div className="flex gap-6 rounded-2xl border border-slate-700 bg-space-800 px-6 py-3 text-sm text-slate-300">
         <span>
@@ -114,6 +118,53 @@ export function Menu() {
           />
         ))}
       </div>
+
+      <MenuFooter />
+    </div>
+  );
+}
+
+function BackendPill({ status }: { status: "unknown" | "warming" | "ready" }) {
+  if (status === "ready") {
+    return (
+      <div className="flex items-center gap-2 rounded-full border border-emerald-700/60 bg-emerald-900/30 px-3 py-1 text-xs text-emerald-200">
+        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+        Backend ready — Play will be instant.
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 rounded-full border border-amber-700/60 bg-amber-900/30 px-3 py-1 text-xs text-amber-200">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
+      Warming up the backend… (free-tier cold start, ~60s)
+    </div>
+  );
+}
+
+function MenuFooter() {
+  const resetProgress = () => {
+    const ok = window.confirm(
+      "Reset your career XP, best streak, and run count? This can't be undone.",
+    );
+    if (!ok) return;
+    try {
+      localStorage.removeItem("sscp-progress-v1");
+    } catch {
+      // ignore
+    }
+    window.location.reload();
+  };
+
+  return (
+    <div className="mt-4 flex items-center gap-3 text-xs text-slate-500">
+      <span>Local progress is stored in your browser.</span>
+      <button
+        type="button"
+        onClick={resetProgress}
+        className="underline transition hover:text-rose-300"
+      >
+        Reset progress
+      </button>
     </div>
   );
 }

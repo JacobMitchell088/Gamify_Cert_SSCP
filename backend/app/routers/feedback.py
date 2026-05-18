@@ -1,4 +1,6 @@
 import logging
+import time
+from collections import defaultdict, deque
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -12,6 +14,35 @@ router = APIRouter(prefix="/feedback", tags=["feedback"])
 GITHUB_API = "https://api.github.com"
 MAX_UA_LEN = 400
 
+# Simple in-memory token bucket: 5 requests per IP per 60s. Fine because Render
+# free runs one instance; resets on restart, which is acceptable for spam control.
+RATE_LIMIT_MAX = 5
+RATE_LIMIT_WINDOW_S = 60.0
+_rate_buckets: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _check_rate_limit(ip: str) -> None:
+    now = time.monotonic()
+    bucket = _rate_buckets[ip]
+    cutoff = now - RATE_LIMIT_WINDOW_S
+    while bucket and bucket[0] < cutoff:
+        bucket.popleft()
+    if len(bucket) >= RATE_LIMIT_MAX:
+        retry_after = max(1, int(RATE_LIMIT_WINDOW_S - (now - bucket[0])))
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many feedback submissions. Try again in {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    bucket.append(now)
+
 
 @router.post("")
 async def submit_feedback(payload: FeedbackIn, request: Request) -> dict:
@@ -21,6 +52,8 @@ async def submit_feedback(payload: FeedbackIn, request: Request) -> dict:
             status_code=503,
             detail="Feedback is not configured on this server.",
         )
+
+    _check_rate_limit(_client_ip(request))
 
     ua = request.headers.get("user-agent") or ""
     if len(ua) > MAX_UA_LEN:

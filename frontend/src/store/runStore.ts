@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import { api } from "../api/client";
+import { trackEvent } from "../lib/analytics";
 import type { AnswerResult, Batch, Domain, Question } from "../types";
 
 export type Phase =
@@ -87,7 +88,12 @@ export const useRunStore = create<RunState>((set, get) => ({
   missed: [],
   selectedGameKey: "tower_defense",
 
-  setSelectedGame: (key: string) => set({ selectedGameKey: key }),
+  setSelectedGame: (key: string) => {
+    if (get().selectedGameKey !== key) {
+      trackEvent("game_selected", { game_key: key });
+    }
+    set({ selectedGameKey: key });
+  },
 
   startRun: async () => {
     set({ phase: "loading", errorMessage: undefined });
@@ -103,6 +109,7 @@ export const useRunStore = create<RunState>((set, get) => ({
         missed: [],
         ...loadBatchIntoState(batch, choice),
       });
+      trackEvent("play_started", { game_key: choice, run_id: batch.run_id });
     } catch (e) {
       set({ phase: "error", errorMessage: (e as Error).message });
     }
@@ -178,6 +185,13 @@ export const useRunStore = create<RunState>((set, get) => ({
         // non-fatal: summary still renders
       }
       persistLocalProgress(finalState.score, finalState.bestStreak);
+      trackEvent("play_finished", {
+        reason: "completed",
+        game_key: finalState.gameKey ?? "unknown",
+        score: finalState.score,
+        total_answered: finalState.totalAnswered,
+        total_correct: finalState.totalCorrect,
+      });
       set({ phase: "summary" });
       return;
     }
@@ -204,18 +218,32 @@ export const useRunStore = create<RunState>((set, get) => ({
   },
 
   abortRun: () => {
-    const { runId, score, bestStreak } = get();
-    if (runId) {
-      api.finishRun(runId).catch(() => {});
+    const s = get();
+    if (s.runId) {
+      api.finishRun(s.runId).catch(() => {});
     }
-    persistLocalProgress(score, bestStreak);
+    persistLocalProgress(s.score, s.bestStreak);
+    trackEvent("play_finished", {
+      reason: "lost",
+      game_key: s.gameKey ?? "unknown",
+      score: s.score,
+      total_answered: s.totalAnswered,
+      total_correct: s.totalCorrect,
+    });
     set({ phase: "summary" });
   },
 
   quitToMenu: () => {
-    const { runId } = get();
-    if (runId) {
-      api.finishRun(runId).catch(() => {});
+    const s = get();
+    if (s.runId) {
+      api.finishRun(s.runId).catch(() => {});
+      trackEvent("play_finished", {
+        reason: "quit",
+        game_key: s.gameKey ?? "unknown",
+        score: s.score,
+        total_answered: s.totalAnswered,
+        total_correct: s.totalCorrect,
+      });
     }
     set({
       phase: "menu",

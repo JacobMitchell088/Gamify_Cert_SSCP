@@ -317,7 +317,55 @@ Hero HP bar on the left (x=20, w=480), boss HP bar on the right (x=`GAME_WIDTH�
 - Sprite/background PNGs: `frontend/public/sprites/` → served at `/sprites/...` by Vite. Both dev (`npm run dev`) and build (`npm run build` → `frontend/dist/sprites/`) pick them up automatically.
 - Frame dims and animation frame counts are duplicated in `RpgBossScene.preload()` and `RpgBossScene.ensureAnimations()` — they must stay in sync with the actual PNG dimensions.
 
-### 10.10 Vault Lockdown shared-graph mechanic (`VaultLockdownScene.ts`)
+### 10.10a Deployed prototype (May 2026)
+The app is now publicly deployed:
+- **Frontend:** Vercel (Vite static build). Vercel Analytics enabled via `<Analytics />` from `@vercel/analytics/react` (NOT `/next` — that subpath is Next.js-only and silently no-ops on Vite).
+- **Backend:** Render free web service. 15-min idle sleep is real. Mitigations live on the frontend (see §10.10c).
+- **Database:** Supabase Postgres via the Transaction Pooler (PgBouncer in tx mode). Driver is `psycopg[binary]==3.2.10`; `db.py` passes `prepare_threshold=None` + `pool_pre_ping=True` to avoid the "prepared statement \"_pg3_N\" does not exist" error that PgBouncer's tx pooling causes with server-side prepared statements.
+- **Python pin:** `backend/.python-version` = `3.11.10`. Without this, Render's autodetect picks 3.14 which has no `pydantic_core` wheel and the build dies in a Rust compile.
+- **CORS:** `cors_origins` env on Render must list the Vercel URL with no trailing slash (browser `Origin` headers never carry one). All routes share the same middleware; one entry covers `/health`, `/run/*`, `/feedback`, `/question/{id}/report`.
+
+### 10.10b Question pool persistence
+Pool data lives in Supabase Postgres now, not Render's ephemeral disk. Seed JSON (`backend/app/data/seed_questions.json`, ~285 questions at time of writing) is only loaded if the `questions` table is empty (`load_seed_if_empty` in `services/pool.py`). Restarting Render with a populated DB is a no-op for seeding — and logs `"seed skip: pool already has N questions"` so it's obvious what happened.
+
+### 10.10c Cold-start UX (frontend)
+The Render free instance sleeps after 15 min; first request can take ~60 s. The frontend mitigates this in two places:
+- **Prewarm on landing.** `frontend/src/store/backendStatus.ts` is a tiny Zustand store that polls `/health` every 5 s until the backend answers. `App.tsx` calls `startWarmup()` once on mount, so the cold start runs *while the user reads the menu*, not after they click Play. The Menu shows an amber "Warming up the backend… (~60s)" pill that flips to green "Backend ready" when `/health` succeeds.
+- **LoadingScreen timer.** When a Play action does hit a cold backend, the loading view shows a live elapsed counter ("12s / ~60s expected"), a progress bar, and switches to "(taking longer than usual)" past 60 s. No more "is it stuck?" anxiety.
+
+The poll loop is guarded by a module-level `pollTimer` + `pollInFlight` so duplicate `startWarmup()` calls (StrictMode double-mount, navigation back to menu, etc.) don't fan out to N parallel timers.
+
+### 10.10d Feedback button is site-wide; Report Question is in-game only
+`FeedbackButton` renders at the top level of `App.tsx` (outside the phase switch) so it's available on menu, overview, loading, summary, review, and in-game. It encodes the current `phase` and `selectedGameKey` into the GitHub issue body as the "Page" metadata — useful for triaging where the user was when they hit submit.
+
+`ReportButton` stays inside the in-game branch only (`if (!currentQuestion) return null` is a defensive secondary guard); it's scoped to a specific question.
+
+### 10.10e /feedback rate limit
+`backend/app/routers/feedback.py` runs a small in-memory token bucket: **5 requests per IP per 60 s**. Bucket is a `defaultdict(deque[float])` of `time.monotonic()` timestamps, trimmed and checked on every request. 429 responses carry a `Retry-After` header.
+
+It's safe to keep in-process because Render free runs a single instance — adding a second worker (or moving off Render) would require Redis or similar. Resets on restart, which is fine for spam control (the bucket is purely defensive, not a billing meter).
+
+Real client IP is read from `X-Forwarded-For` first (Render is behind a proxy); falls back to `request.client.host`.
+
+### 10.10f Vercel Analytics events
+Custom events are wrapped in `frontend/src/lib/analytics.ts` (`trackEvent(name, props)`) so call sites have a strict event-name union and a single import surface. Tracking failures are swallowed — analytics must never break the app.
+
+Fired events:
+- `play_started` — runStore `startRun` after the first batch arrives. Props: `game_key`, `run_id`.
+- `play_finished` — fires from three paths, each with a `reason` prop: `completed` (`advance` hits the (currently unreachable) final-batch path), `lost` (`abortRun`, e.g. core/hero death), `quit` (`quitToMenu`). Props: `game_key`, `score`, `total_answered`, `total_correct`.
+- `game_selected` — only fires when the key actually changes (no churn from clicking the same card twice).
+- `feedback_submitted` — FeedbackButton on 2xx. Props: `category`, `has_contact`, `page`.
+- `report_submitted` — ReportButton on 2xx. Props: `question_id`, `had_answered`.
+
+### 10.10g Menu footer / reset progress
+Career XP / best streak / runs are stored in `localStorage` under `sscp-progress-v1`. The Menu footer exposes a "Reset progress" link with a confirm dialog → `localStorage.removeItem(...)` → `window.location.reload()`. Useful for QA, and for users who want a clean slate.
+
+### 10.10h Endless Tower Defense (no run-end cap)
+`backend/app/services/games.py` no longer defines `TOTAL_BATCHES` — only `BATCH_SIZE = 10`. `_build_batch` always returns `is_final=False`, so the backend will keep handing out batches forever. TD's `buildWaveQueue` removes the old enemy cap and adds super-linear surge past Q20 (`Math.pow(qIndex - 20, 1.35) * 0.6`) plus a late-game HP boost past Q25, so the difficulty curve keeps climbing until the core dies. HUD reads "Wave N" instead of "Q N/30".
+
+RPG still effectively ends at the boss/hero death; it doesn't push the cap because each run is a single fight.
+
+### 10.10i Vault Lockdown shared-graph mechanic (`VaultLockdownScene.ts`)
 Replaces the original "6 straight radial paths" design. Each run rolls a fresh random graph that all attackers share:
 
 - **Graph generation** (`generateGraph()` at the bottom of the scene file): vault at center, 6 spawn nodes on the outer ring (angles jittered ±11° off the cardinal sextants), 4–5 random mid-ring nodes, 2–3 inner-ring nodes, and ring 0→1→2→vault edges with occasional same-ring lateral edges. Some spawns also get a 25% shortcut edge directly to an inner node, so a few attackers start inherently closer to the vault. There's a final connectivity sweep that wires any isolated spawn directly to its nearest inner node.
@@ -335,7 +383,7 @@ If you change `MAX_LOCKS_PER_EDGE`, also update the placing-phase hint text — 
 
 A single backend flag exposes each question's `correct_index` to the frontend so every option card can render a small "✓ DEV" badge over the right answer for debugging and testing.
 
-**Toggle location:** `backend/app/config.py` → `dev_reveal_answers: bool` (currently `True`). Flip to `False` and restart the backend before any public deploy.
+**Toggle location:** `backend/app/config.py` → `dev_reveal_answers: bool` (**currently `False`** — flipped off for the deployed prototype / user testing). Flip back to `True` locally if you need the badges back; can also be overridden per-environment via the `DEV_REVEAL_ANSWERS` env var.
 
 **Plumbing:**
 - `backend/app/config.py` — the flag.

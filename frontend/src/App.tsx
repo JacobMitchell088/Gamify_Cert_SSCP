@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { ExitButton } from "./components/ExitButton";
 import { FeedbackButton } from "./components/FeedbackButton";
@@ -9,20 +9,36 @@ import { ReportButton } from "./components/ReportButton";
 import { RunReview } from "./components/RunReview";
 import { RunSummary } from "./components/RunSummary";
 import { GameHost } from "./games/GameHost";
+import { useBackendStatus } from "./store/backendStatus";
 import { useRunStore } from "./store/runStore";
-import { api } from "./api/client";
 
 export default function App() {
   const phase = useRunStore((s) => s.phase);
   const errorMessage = useRunStore((s) => s.errorMessage);
   const reset = useRunStore((s) => s.reset);
+  const startWarmup = useBackendStatus((s) => s.startWarmup);
 
   useEffect(() => {
-    api.health().catch(() => {
-      // surfaced via errorMessage if it matters for a Play attempt
-    });
-  }, []);
+    // Fire the cold-start ping as soon as the user lands so the backend is
+    // already warm by the time they hit Play. The store polls until ready.
+    startWarmup();
+  }, [startWarmup]);
 
+  return (
+    <>
+      <PhaseContent phase={phase} errorMessage={errorMessage} reset={reset} />
+      <FeedbackButton />
+    </>
+  );
+}
+
+interface PhaseContentProps {
+  phase: ReturnType<typeof useRunStore.getState>["phase"];
+  errorMessage?: string;
+  reset: () => void;
+}
+
+function PhaseContent({ phase, errorMessage, reset }: PhaseContentProps) {
   if (phase === "menu") return <Menu />;
   if (phase === "overview") return <GameOverview />;
   if (phase === "loading") return <LoadingScreen />;
@@ -32,7 +48,8 @@ export default function App() {
         <h2 className="text-2xl font-bold text-rose-400">Backend not reachable</h2>
         <p className="text-slate-300">{errorMessage}</p>
         <p className="text-sm text-slate-500">
-          Make sure the backend is running on <code>localhost:8000</code>.
+          The backend may still be waking up from a cold start — give it ~60 seconds
+          and try again.
         </p>
         <button
           onClick={reset}
@@ -50,7 +67,6 @@ export default function App() {
     <div className="flex h-full flex-col">
       <HUD />
       <GameHost />
-      <FeedbackButton />
       <ReportButton />
       <ExitButton />
     </div>
@@ -58,13 +74,37 @@ export default function App() {
 }
 
 function LoadingScreen() {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const start = performance.now();
+    const id = window.setInterval(() => {
+      setElapsed(Math.floor((performance.now() - start) / 1000));
+    }, 500);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const expected = 60;
+  const pct = Math.min(100, Math.round((elapsed / expected) * 100));
+  const overdue = elapsed > expected;
+
   return (
     <div className="flex h-full items-center justify-center text-slate-400">
-      <div className="flex flex-col items-center gap-3">
+      <div className="flex flex-col items-center gap-3 px-6">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-space-accent border-t-transparent" />
-        <div>Warming up the gauntlet…</div>
-        <div className="text-xs text-slate-500">
-          (free-tier backend cold start — usually ~60 seconds on first load)
+        <div className="text-lg text-slate-200">Warming up the gauntlet…</div>
+        <div className="font-mono text-sm text-slate-300">
+          {elapsed}s {overdue ? "(taking longer than usual)" : `/ ~${expected}s expected`}
+        </div>
+        <div className="h-1.5 w-64 overflow-hidden rounded-full bg-space-700">
+          <div
+            className="h-full bg-space-accent transition-all duration-500"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="max-w-md text-center text-xs text-slate-500">
+          Free-tier backend cold start — first load after a 15-minute idle period
+          can take up to a minute. It's not stuck.
         </div>
       </div>
     </div>

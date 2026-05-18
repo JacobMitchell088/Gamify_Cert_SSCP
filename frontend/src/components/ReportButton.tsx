@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { api } from "../api/client";
+import { trackEvent } from "../lib/analytics";
 import { useRunStore } from "../store/runStore";
 
 type Status = "idle" | "submitting" | "success" | "error";
@@ -56,6 +57,10 @@ export function ReportButton() {
         reason: trimmed,
         had_answered: target.choice !== null,
         player_pick: target.choice,
+      });
+      trackEvent("report_submitted", {
+        question_id: target.id,
+        had_answered: target.choice !== null,
       });
       setStatus("success");
       setOpen(false);

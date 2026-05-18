@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { api } from "../api/client";
+import { trackEvent } from "../lib/analytics";
 import { useRunStore } from "../store/runStore";
 
 type Status = "idle" | "submitting" | "success" | "error";
@@ -59,6 +60,11 @@ export function FeedbackButton() {
         message: trimmed,
         category,
         contact: contact.trim() || null,
+        page,
+      });
+      trackEvent("feedback_submitted", {
+        category,
+        has_contact: contact.trim().length > 0,
         page,
       });
       setStatus("success");

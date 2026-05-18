@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # question's correct_index in its payload so the frontend can render a
     # debug badge on the right answer. Flip to False before any public deploy.
     # See CLAUDE.md §11 for details.
-    dev_reveal_answers: bool = True
+    dev_reveal_answers: bool = False
 
     # GitHub Issues integration for the in-game Feedback button. When both are
     # set, POST /feedback opens an issue in the named repo via the GitHub API.

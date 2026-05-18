@@ -6,17 +6,26 @@ See [GAMES.md](./GAMES.md) for the full catalogue of mini-game ideas.
 
 ## Status (current)
 
-- ✅ Backend: FastAPI, SQLite question pool, seed-on-startup, `/run/*` endpoints.
+- ✅ Backend: FastAPI, Postgres (Supabase) in prod / SQLite locally, seed-on-startup, `/run/*` + `/feedback` + `/question/{id}/report` endpoints.
 - ✅ OpenRouter racer + APScheduler background refill (no-ops without an API key — fine for local play).
-- ✅ Frontend: Vite + React + TypeScript + Tailwind + Zustand + Phaser 3.
-- ✅ Mini-game: **Tower Defense: Exploit Wave** — place towers by answering, defend the core for 30 questions.
+- ✅ Frontend: Vite + React + TypeScript + Tailwind + Zustand + Phaser 3, Vercel Analytics wired.
+- ✅ Mini-game: **Tower Defense: Exploit Wave** — place towers by answering, hold the core endlessly with super-linear scaling past Q20.
 - ✅ Mini-game: **Hacker Boss Duel** — RPG combat against the Mecha-stone Golem. Correct answers parry-counter, wrong answers take a hit; collect relic modifiers from treasure chambers.
-- ✅ Mini-game: **Vault Lockdown** — six threat paths close in on a central vault. Correct = drop a lock on a path of your choice; wrong = attackers gain an extra step. Don't let any path reach the vault.
 - ✅ Run summary + missed-question review with per-domain breakdown.
+- ✅ **Deployed prototype:** frontend on Vercel, backend on Render free, questions on Supabase Postgres.
 
-**Active games:** Tower Defense, Hacker Boss Duel, and Vault Lockdown. (Asteroid Answer Run remains in the codebase as an earlier prototype but is hidden from the menu.)
+**Player-visible at launch:** Tower Defense (Main Game, endless) and Hacker Boss Duel. Vault Lockdown, Patch Tuesday, Asteroid Answer Run, and Crypto Memory Grid remain in the codebase as "Coming Soon" entries on the menu.
 
-A run is 30 questions. The selected mini-game persists for the whole run — there is no rotation. The player picks the game on the menu; the backend respects that choice.
+A Hacker Boss Duel run is 30 questions; Tower Defense is endless until the core falls. The selected mini-game persists for the whole run — there is no rotation.
+
+### Prototype niceties
+
+- **Backend prewarm pill** on the menu — fires `/health` on landing so Render's cold start happens during browsing, not on Play.
+- **Loading screen** has an elapsed timer + progress bar so users know it's not hung (~60 s expected on first load).
+- **Feedback button** on every screen (menu, in-game, summary) — opens a GitHub issue via the `/feedback` endpoint, rate-limited to 5/min/IP.
+- **Report Question button** in-game only — flags a specific question for review.
+- **Reset progress** link in the menu footer clears local XP / best streak / run count.
+- **Analytics events** (`play_started`, `play_finished`, `game_selected`, `feedback_submitted`, `report_submitted`) via Vercel Analytics.
 
 ## Prerequisites
 
@@ -73,13 +82,19 @@ Open `http://localhost:5173`, pick a game from the menu, hit **Play**.
 
 ## Environment variables
 
-| Var                       | Where    | Purpose                                      |
-|---------------------------|----------|----------------------------------------------|
-| `OPENROUTER_API_KEY`      | Backend  | Auth for OpenRouter calls.                   |
-| `OPENROUTER_FREE_MODELS`  | Backend  | Comma-separated list of `:free` models.      |
-| `POOL_REFILL_THRESHOLD`   | Backend  | Trigger refill below this many unused.       |
-| `MONTHLY_CALL_CAP`        | Backend  | Hard ceiling on outbound LLM calls/month.    |
-| `VITE_API_BASE_URL`       | Frontend | Backend origin (defaults to localhost:8000). |
+| Var                       | Where    | Purpose                                                                             |
+|---------------------------|----------|-------------------------------------------------------------------------------------|
+| `OPENROUTER_API_KEY`      | Backend  | Auth for OpenRouter calls.                                                          |
+| `OPENROUTER_FREE_MODELS`  | Backend  | Comma-separated list of `:free` models.                                             |
+| `POOL_REFILL_THRESHOLD`   | Backend  | Trigger refill below this many unused.                                              |
+| `MONTHLY_CALL_CAP`        | Backend  | Hard ceiling on outbound LLM calls/month.                                           |
+| `DATABASE_URL`            | Backend  | Postgres URL in prod (Supabase tx pooler). Defaults to local SQLite.                |
+| `CORS_ORIGINS`            | Backend  | Comma-separated allow-list. Must include the Vercel URL with no trailing slash.     |
+| `GITHUB_TOKEN`            | Backend  | PAT with `repo` (or `public_repo`) scope, used by `/feedback` to open issues.       |
+| `GITHUB_REPO`             | Backend  | `owner/name` of the issue repo, e.g. `Jacobmitchell088/Gamify_Cert_SSCP`.           |
+| `GITHUB_ISSUE_LABELS`     | Backend  | Comma-separated labels applied to feedback issues (default `user-feedback`).        |
+| `DEV_REVEAL_ANSWERS`      | Backend  | When `true`, exposes `correct_index` per question for in-game debug badges. Off in prod. |
+| `VITE_API_BASE_URL`       | Frontend | Backend origin (defaults to `http://localhost:8000`).                               |
 
 ## Project layout
 
@@ -128,15 +143,17 @@ Originals are licensed for free use per their respective itch.io packs.
 
 ## Deployment
 
-Targets in mind for v1 (not yet deployed):
-- **Frontend** → Vercel or Cloudflare Pages (static + CDN).
-- **Backend** → Render free tier (15-min idle sleep is acceptable; frontend handles cold-start gracefully).
-- Secrets in Render env vars only — never in repo.
+Currently deployed:
+- **Frontend** → Vercel (static + CDN, Vercel Analytics enabled).
+- **Backend** → Render free tier. 15-min idle sleep is mitigated by a menu-mount `/health` prewarm + an elapsed-timer LoadingScreen so the first-load cold start is transparent.
+- **Database** → Supabase Postgres (Transaction Pooler / PgBouncer). `psycopg[binary]` with `prepare_threshold=None` to play nice with tx-mode pooling.
+- **Secrets** live in Render env vars only — never in repo.
+
+Pin `backend/.python-version` to `3.11.10` so Render doesn't pick up a too-new Python that breaks the wheels.
 
 ## What's next
 
-1. Lift the 30-question cap for RPG so the boss fight can actually run to a death state.
-2. Build mini-game #4 — Crypto Memory Grid is the next planned addition (see GAMES.md).
-3. Bulk-generate the seed pool via OpenRouter and spot-check.
-4. Deploy: backend → Render, frontend → Vercel; wire CORS and env vars.
-5. "Report this question" button → flagged-questions table for manual review of hallucinated content.
+1. Build mini-game #4 — Crypto Memory Grid is the next planned addition (see GAMES.md).
+2. Bulk-generate more of the seed pool via OpenRouter and spot-check.
+3. Iterate on Vault Lockdown / Patch Tuesday to bring them out of "Coming Soon".
+4. Domain-weighted refill so under-represented SSCP domains catch up.
